@@ -24,6 +24,8 @@ describe('Chit Scheme Creation: Configurable Commission Options & Safeguards (e2
     await app.init();
   });
 
+  const runId = Date.now().toString().slice(-6);
+
   afterAll(async () => {
     await app.close();
   });
@@ -108,7 +110,7 @@ describe('Chit Scheme Creation: Configurable Commission Options & Safeguards (e2
       .post('/chit-groups')
       .set('Authorization', `Bearer ${authToken}`)
       .send({
-        groupCode: 'COMM-TEST-NO-COMM',
+        groupCode: `COMM-NO-COMM-${runId}`,
         name: 'Zero Commission Community Scheme',
         chitType: 'FIXED_INSTALLMENT',
         totalValue: 10400,
@@ -130,7 +132,7 @@ describe('Chit Scheme Creation: Configurable Commission Options & Safeguards (e2
       .post('/chit-groups')
       .set('Authorization', `Bearer ${authToken}`)
       .send({
-        groupCode: 'COMM-TEST-PCT-CHIT',
+        groupCode: `COMM-PCT-CHIT-${runId}`,
         name: 'Standard 5% Chit Value Scheme',
         chitType: 'AUCTION_BASED',
         totalValue: 100000,
@@ -154,7 +156,7 @@ describe('Chit Scheme Creation: Configurable Commission Options & Safeguards (e2
       .post('/chit-groups')
       .set('Authorization', `Bearer ${authToken}`)
       .send({
-        groupCode: 'COMM-TEST-PCT-COLL',
+        groupCode: `COMM-PCT-COLL-${runId}`,
         name: '4% Collection Fee Scheme',
         chitType: 'AUCTION_BASED',
         totalValue: 100000,
@@ -177,7 +179,7 @@ describe('Chit Scheme Creation: Configurable Commission Options & Safeguards (e2
       .post('/chit-groups')
       .set('Authorization', `Bearer ${authToken}`)
       .send({
-        groupCode: 'COMM-TEST-FIXED-INST',
+        groupCode: `COMM-FIXED-INST-${runId}`,
         name: '₹300 per installment fee scheme',
         chitType: 'AUCTION_BASED',
         totalValue: 100000,
@@ -200,7 +202,7 @@ describe('Chit Scheme Creation: Configurable Commission Options & Safeguards (e2
       .post('/chit-groups')
       .set('Authorization', `Bearer ${authToken}`)
       .send({
-        groupCode: 'COMM-TEST-FIXED-GRP',
+        groupCode: `COMM-FIXED-GRP-${runId}`,
         name: '₹6,000 flat group fee scheme',
         chitType: 'AUCTION_BASED',
         totalValue: 100000,
@@ -223,7 +225,7 @@ describe('Chit Scheme Creation: Configurable Commission Options & Safeguards (e2
       .post('/chit-groups')
       .set('Authorization', `Bearer ${authToken}`)
       .send({
-        groupCode: 'COMM-TEST-AUCT-EARN',
+        groupCode: `COMM-AUCT-EARN-${runId}`,
         name: 'Auction Spread Sharing Scheme',
         chitType: 'AUCTION_BASED',
         totalValue: 100000,
@@ -245,7 +247,7 @@ describe('Chit Scheme Creation: Configurable Commission Options & Safeguards (e2
       .post('/chit-groups')
       .set('Authorization', `Bearer ${authToken}`)
       .send({
-        groupCode: 'COMM-TEST-CUSTOM-RULE',
+        groupCode: `COMM-CUSTOM-RULE-${runId}`,
         name: 'Custom Partnership Scheme',
         chitType: 'AUCTION_BASED',
         totalValue: 100000,
@@ -269,7 +271,7 @@ describe('Chit Scheme Creation: Configurable Commission Options & Safeguards (e2
       .post('/chit-groups')
       .set('Authorization', `Bearer ${authToken}`)
       .send({
-        groupCode: 'COMM-TEST-UNCONFIRMED',
+        groupCode: `COMM-UNCONFIRMED-${runId}`,
         name: 'Unconfirmed Commission Scheme',
         chitType: 'AUCTION_BASED',
         totalValue: 100000,

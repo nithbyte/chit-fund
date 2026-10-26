@@ -401,23 +401,27 @@ export const CollectPage: React.FC = () => {
                   >
                     All Chits Combined
                   </button>
-                  {duesData.memberships.map((mem) => (
-                    <button
-                      key={mem.id}
-                      type="button"
-                      onClick={() => setSelectedMembershipId(mem.id)}
-                      className={`p-2 rounded-lg text-xs font-semibold text-left transition-all ${
-                        selectedMembershipId === mem.id
-                          ? 'bg-white text-teal-900 shadow-sm'
-                          : 'bg-teal-700/50 text-teal-100 hover:bg-teal-700'
-                      }`}
-                    >
-                      <div className="truncate">{mem.chitGroup.name}</div>
-                      <div className="text-[10px] opacity-80 font-mono">
-                        Ticket #{mem.ticketNumber}
-                      </div>
-                    </button>
-                  ))}
+                  {duesData.memberships.map((mem: any) => {
+                    const memId = mem.id || mem.membershipId;
+                    const groupTitle = mem.chitGroup?.name || mem.groupName || 'Chit Group';
+                    return (
+                      <button
+                        key={memId}
+                        type="button"
+                        onClick={() => setSelectedMembershipId(memId)}
+                        className={`p-2 rounded-lg text-xs font-semibold text-left transition-all ${
+                          selectedMembershipId === memId
+                            ? 'bg-white text-teal-900 shadow-sm'
+                            : 'bg-teal-700/50 text-teal-100 hover:bg-teal-700'
+                        }`}
+                      >
+                        <div className="truncate">{groupTitle}</div>
+                        <div className="text-[10px] opacity-80 font-mono">
+                          Ticket #{mem.ticketNumber}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}

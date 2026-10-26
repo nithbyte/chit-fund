@@ -37,6 +37,7 @@ Thumbs.db
 coverage/
 *.lcov
 .nyc_output
+.playwright-mcp/
 
 # Prisma
 # Keep migrations, ignore generated client if needed (though usually generated to node_modules)

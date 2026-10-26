@@ -255,6 +255,7 @@ export class CollectionsService {
     });
 
     const membershipsSummary = customer.memberships.map((m) => ({
+      id: m.id,
       membershipId: m.id,
       ticketNumber: m.ticketNumber,
       groupId: m.chitGroup.id,
@@ -263,6 +264,16 @@ export class CollectionsService {
       monthlyContribution: Number(m.chitGroup.monthlyContribution),
       currentMonth: m.chitGroup.currentMonth,
       totalMonths: m.chitGroup.totalMonths,
+      chitGroup: {
+        id: m.chitGroup.id,
+        groupCode: m.chitGroup.groupCode,
+        name: m.chitGroup.name,
+        status: m.chitGroup.status,
+        totalValue: Number(m.chitGroup.totalValue),
+        monthlyContribution: Number(m.chitGroup.monthlyContribution),
+        currentMonth: m.chitGroup.currentMonth,
+        totalMonths: m.chitGroup.totalMonths,
+      },
     }));
 
     return {
