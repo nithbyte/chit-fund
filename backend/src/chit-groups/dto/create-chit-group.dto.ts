@@ -36,10 +36,52 @@ export class CreateChitGroupDto {
   @IsDateString()
   startDate!: string;
 
-  @ApiPropertyOptional({ example: 5.0, description: 'Foreman commission percent (e.g. 5.0%)' })
+  @ApiPropertyOptional({ example: 5.0, description: 'Foreman commission percent (legacy field)' })
   @IsOptional()
   @IsNumber()
   foremanCommissionRate?: number;
+
+  @ApiPropertyOptional({
+    enum: [
+      'NOT_CONFIGURED',
+      'NO_COMMISSION',
+      'PERCENTAGE_OF_CHIT_VALUE',
+      'PERCENTAGE_OF_EACH_COLLECTION',
+      'FIXED_AMOUNT_PER_INSTALLMENT',
+      'FIXED_AMOUNT_PER_CHIT_GROUP',
+      'AUCTION_BASED_EARNINGS',
+      'CUSTOM_OTHER',
+    ],
+    default: 'NOT_CONFIGURED',
+    description: 'Commission calculation method',
+  })
+  @IsOptional()
+  @IsString()
+  commissionType?: string;
+
+  @ApiPropertyOptional({ example: 5.0, description: 'Commission rate percentage if percentage-based' })
+  @IsOptional()
+  @IsNumber()
+  commissionRate?: number;
+
+  @ApiPropertyOptional({ example: 500, description: 'Fixed commission amount in INR if fixed-fee' })
+  @IsOptional()
+  @IsNumber()
+  commissionAmount?: number;
+
+  @ApiPropertyOptional({ example: 'CHIT_VALUE', description: 'Base identifier for commission calculation' })
+  @IsOptional()
+  @IsString()
+  commissionCalculationBase?: string;
+
+  @ApiPropertyOptional({ example: 'Foreman fee per Chit Funds Act', description: 'Explanation or custom rules' })
+  @IsOptional()
+  @IsString()
+  commissionNotes?: string;
+
+  @ApiPropertyOptional({ example: true, description: 'Whether the commission terms are officially confirmed' })
+  @IsOptional()
+  isCommissionConfirmed?: boolean;
 
   @ApiPropertyOptional({ example: 15000, description: 'Minimum bid discount in INR' })
   @IsOptional()

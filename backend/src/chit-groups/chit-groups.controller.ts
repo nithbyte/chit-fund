@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
@@ -7,6 +7,7 @@ import { ChitGroupsService } from './chit-groups.service.js';
 import { CreateChitGroupDto } from './dto/create-chit-group.dto.js';
 import { EnrollMemberDto } from './dto/enroll-member.dto.js';
 import { ActivateChitGroupDto } from './dto/activate-chit-group.dto.js';
+import { UpdateCommissionDto } from './dto/update-commission.dto.js';
 
 @ApiTags('Chit Groups')
 @ApiBearerAuth()
@@ -65,5 +66,16 @@ export class ChitGroupsController {
   @ApiOperation({ summary: 'Enroll a customer to a ticket slot in this chit group' })
   async enrollMember(@Param('id') id: string, @Body() enrollMemberDto: EnrollMemberDto) {
     return this.chitGroupsService.enrollMember(id, enrollMemberDto);
+  }
+
+  @Patch(':id/commission')
+  @ApiOperation({ summary: 'Update and configure commission & earnings terms for this chit group' })
+  @ApiResponse({ status: 200, description: 'Commission settings updated and logged' })
+  async updateCommission(
+    @Param('id') id: string,
+    @Body() dto: UpdateCommissionDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.chitGroupsService.updateCommission(id, dto, user?.id);
   }
 }

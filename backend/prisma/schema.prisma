@@ -24,6 +24,17 @@ enum ChitGroupStatus {
   CANCELLED
 }
 
+enum CommissionType {
+  NOT_CONFIGURED
+  NO_COMMISSION
+  PERCENTAGE_OF_CHIT_VALUE
+  PERCENTAGE_OF_EACH_COLLECTION
+  FIXED_AMOUNT_PER_INSTALLMENT
+  FIXED_AMOUNT_PER_CHIT_GROUP
+  AUCTION_BASED_EARNINGS
+  CUSTOM_OTHER
+}
+
 enum MembershipStatus {
   ACTIVE
   SURRENDERED
@@ -112,9 +123,15 @@ model ChitGroup {
   currentMonth          Int             @default(1) @map("current_month")
   startDate             DateTime        @map("start_date")
   expectedEndDate       DateTime        @map("expected_end_date")
-  foremanCommissionRate Decimal         @default(5.00) @map("foreman_commission_rate") @db.Decimal(5, 2)
-  minBidDiscount        Decimal?        @map("min_bid_discount") @db.Decimal(12, 2)
-  maxBidDiscount        Decimal?        @map("max_bid_discount") @db.Decimal(12, 2)
+  foremanCommissionRate     Decimal         @default(5.00) @map("foreman_commission_rate") @db.Decimal(5, 2)
+  commissionType            CommissionType  @default(PERCENTAGE_OF_CHIT_VALUE) @map("commission_type")
+  commissionRate            Decimal?        @map("commission_rate") @db.Decimal(5, 2)
+  commissionAmount          Decimal?        @map("commission_amount") @db.Decimal(12, 2)
+  commissionCalculationBase String?         @map("commission_calculation_base")
+  commissionNotes           String?         @map("commission_notes")
+  isCommissionConfirmed     Boolean         @default(false) @map("is_commission_confirmed")
+  minBidDiscount            Decimal?        @map("min_bid_discount") @db.Decimal(12, 2)
+  maxBidDiscount            Decimal?        @map("max_bid_discount") @db.Decimal(12, 2)
   auctionFrequency      String          @default("MONTHLY") @map("auction_frequency")
   auctionDayOfMonth     Int?            @map("auction_day_of_month")
   status                ChitGroupStatus @default(ACTIVE)

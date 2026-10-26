@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ChitGroupStatus, ChitType } from '@prisma/client';
+import { ChitGroupStatus, ChitType, CommissionType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateChitGroupDto } from './dto/create-chit-group.dto.js';
 import { EnrollMemberDto } from './dto/enroll-member.dto.js';
 import { ActivateChitGroupDto } from './dto/activate-chit-group.dto.js';
+import { UpdateCommissionDto } from './dto/update-commission.dto.js';
 
 export interface SchemeTemplate {
   templateId: string;
@@ -15,7 +16,10 @@ export interface SchemeTemplate {
   durationLabel: string;
   expectedMemberContribution: number;
   totalChitValue: number;
-  defaultCommissionRate: number;
+  defaultCommissionType: CommissionType;
+  defaultCommissionRate?: number;
+  defaultCommissionAmount?: number;
+  commissionCalculationBase?: string;
   requiresMemberConfirmation: boolean;
   requiresPayoutConfirmation: boolean;
   notes: string;
@@ -43,7 +47,10 @@ export class ChitGroupsService {
         durationLabel: '52 Weeks (1 Year)',
         expectedMemberContribution: 10400,
         totalChitValue: 10400, // Stated base value per ticket
-        defaultCommissionRate: 5.0,
+        defaultCommissionType: CommissionType.FIXED_AMOUNT_PER_INSTALLMENT,
+        defaultCommissionAmount: 0,
+        defaultCommissionRate: 0,
+        commissionCalculationBase: 'INSTALLMENT_AMOUNT',
         requiresMemberConfirmation: true,
         requiresPayoutConfirmation: true,
         notes:
@@ -61,7 +68,9 @@ export class ChitGroupsService {
         durationLabel: '20 Months',
         expectedMemberContribution: 100000,
         totalChitValue: 100000, // Stated amount paid to winning member
+        defaultCommissionType: CommissionType.PERCENTAGE_OF_CHIT_VALUE,
         defaultCommissionRate: 5.0,
+        commissionCalculationBase: 'CHIT_VALUE',
         requiresMemberConfirmation: true,
         requiresPayoutConfirmation: true,
         notes:
@@ -169,6 +178,67 @@ export class ChitGroupsService {
     };
   }
 
+  validateCommissionConfiguration(dto: {
+    commissionType?: CommissionType | string;
+    commissionRate?: number;
+    commissionAmount?: number;
+    commissionCalculationBase?: string;
+    commissionNotes?: string;
+    isCommissionConfirmed?: boolean;
+  }) {
+    const type = (dto.commissionType || CommissionType.NOT_CONFIGURED) as CommissionType;
+
+    if (type === CommissionType.PERCENTAGE_OF_CHIT_VALUE) {
+      if (
+        dto.commissionRate === undefined ||
+        dto.commissionRate === null ||
+        Number.isNaN(Number(dto.commissionRate)) ||
+        Number(dto.commissionRate) < 0 ||
+        Number(dto.commissionRate) > 100
+      ) {
+        throw new BadRequestException(
+          'Percentage of Chit Value requires a valid commission rate between 0% and 100%',
+        );
+      }
+    } else if (type === CommissionType.PERCENTAGE_OF_EACH_COLLECTION) {
+      if (
+        dto.commissionRate === undefined ||
+        dto.commissionRate === null ||
+        Number.isNaN(Number(dto.commissionRate)) ||
+        Number(dto.commissionRate) < 0 ||
+        Number(dto.commissionRate) > 100
+      ) {
+        throw new BadRequestException(
+          'Percentage of Each Collection requires a valid commission rate between 0% and 100%',
+        );
+      }
+    } else if (type === CommissionType.FIXED_AMOUNT_PER_INSTALLMENT) {
+      if (
+        dto.commissionAmount === undefined ||
+        dto.commissionAmount === null ||
+        Number.isNaN(Number(dto.commissionAmount)) ||
+        Number(dto.commissionAmount) < 0
+      ) {
+        throw new BadRequestException('Fixed Amount per Installment requires a non-negative INR amount');
+      }
+    } else if (type === CommissionType.FIXED_AMOUNT_PER_CHIT_GROUP) {
+      if (
+        dto.commissionAmount === undefined ||
+        dto.commissionAmount === null ||
+        Number.isNaN(Number(dto.commissionAmount)) ||
+        Number(dto.commissionAmount) < 0
+      ) {
+        throw new BadRequestException('Fixed Amount per Chit Group requires a non-negative INR amount');
+      }
+    } else if (type === CommissionType.CUSTOM_OTHER) {
+      if (!dto.commissionNotes?.trim()) {
+        throw new BadRequestException(
+          'Custom / Other commission type requires an explicit description and calculation formula',
+        );
+      }
+    }
+  }
+
   async create(createDto: CreateChitGroupDto, performedById?: string) {
     const existing = await this.prisma.chitGroup.findUnique({
       where: { groupCode: createDto.groupCode.trim() },
@@ -176,6 +246,19 @@ export class ChitGroupsService {
     if (existing) {
       throw new BadRequestException(`Group code '${createDto.groupCode}' already exists`);
     }
+
+    const commissionType =
+      (createDto.commissionType as CommissionType) || CommissionType.NOT_CONFIGURED;
+
+    // Validate commission configurations
+    this.validateCommissionConfiguration({
+      commissionType,
+      commissionRate: createDto.commissionRate ?? createDto.foremanCommissionRate,
+      commissionAmount: createDto.commissionAmount,
+      commissionCalculationBase: createDto.commissionCalculationBase,
+      commissionNotes: createDto.commissionNotes,
+      isCommissionConfirmed: createDto.isCommissionConfirmed,
+    });
 
     const isWeekly = (createDto.auctionFrequency || '').toUpperCase() === 'WEEKLY';
     const frequency = isWeekly ? 'WEEKLY' : 'MONTHLY';
@@ -195,6 +278,13 @@ export class ChitGroupsService {
         ? ChitGroupStatus.PLANNED
         : ChitGroupStatus.ACTIVE);
 
+    const commissionRate =
+      createDto.commissionRate !== undefined
+        ? createDto.commissionRate
+        : commissionType === CommissionType.PERCENTAGE_OF_CHIT_VALUE
+          ? createDto.foremanCommissionRate ?? null
+          : null;
+
     return this.prisma.$transaction(async (tx) => {
       const chitGroup = await tx.chitGroup.create({
         data: {
@@ -207,7 +297,13 @@ export class ChitGroupsService {
           currentMonth: 1,
           startDate,
           expectedEndDate,
-          foremanCommissionRate: createDto.foremanCommissionRate ?? 5.0,
+          foremanCommissionRate: commissionRate ?? createDto.foremanCommissionRate ?? 5.0,
+          commissionType,
+          commissionRate,
+          commissionAmount: createDto.commissionAmount ?? null,
+          commissionCalculationBase: createDto.commissionCalculationBase ?? null,
+          commissionNotes: createDto.commissionNotes ?? null,
+          isCommissionConfirmed: Boolean(createDto.isCommissionConfirmed),
           minBidDiscount: createDto.minBidDiscount ?? null,
           maxBidDiscount: createDto.maxBidDiscount ?? null,
           auctionFrequency: frequency,
@@ -236,6 +332,10 @@ export class ChitGroupsService {
               totalValue: Number(chitGroup.totalValue),
               totalMonths: chitGroup.totalMonths,
               status: chitGroup.status,
+              commissionType: chitGroup.commissionType,
+              commissionRate: chitGroup.commissionRate ? Number(chitGroup.commissionRate) : null,
+              commissionAmount: chitGroup.commissionAmount ? Number(chitGroup.commissionAmount) : null,
+              isCommissionConfirmed: chitGroup.isCommissionConfirmed,
             },
           },
         });
@@ -266,6 +366,17 @@ export class ChitGroupsService {
       throw new BadRequestException(`Chit Group ${group.groupCode} is already active`);
     }
 
+    if (dto.commissionType) {
+      this.validateCommissionConfiguration({
+        commissionType: dto.commissionType as CommissionType,
+        commissionRate: dto.commissionRate ?? dto.foremanCommissionRate,
+        commissionAmount: dto.commissionAmount,
+        commissionCalculationBase: dto.commissionCalculationBase,
+        commissionNotes: dto.commissionNotes,
+        isCommissionConfirmed: dto.isCommissionConfirmed,
+      });
+    }
+
     const startDate = new Date(dto.startDate);
     const isWeekly = (group.auctionFrequency || '').toUpperCase() === 'WEEKLY';
 
@@ -291,7 +402,13 @@ export class ChitGroupsService {
           startDate,
           expectedEndDate,
           totalMonths: dto.totalMonths,
-          foremanCommissionRate: dto.foremanCommissionRate ?? group.foremanCommissionRate,
+          foremanCommissionRate: dto.commissionRate ?? dto.foremanCommissionRate ?? group.foremanCommissionRate,
+          commissionType: (dto.commissionType as CommissionType) ?? group.commissionType,
+          commissionRate: dto.commissionRate !== undefined ? dto.commissionRate : group.commissionRate,
+          commissionAmount: dto.commissionAmount !== undefined ? dto.commissionAmount : group.commissionAmount,
+          commissionCalculationBase: dto.commissionCalculationBase ?? group.commissionCalculationBase,
+          commissionNotes: dto.commissionNotes ?? group.commissionNotes,
+          isCommissionConfirmed: dto.isCommissionConfirmed !== undefined ? dto.isCommissionConfirmed : group.isCommissionConfirmed,
           minBidDiscount: dto.minBidDiscount ?? group.minBidDiscount,
           maxBidDiscount: dto.maxBidDiscount ?? group.maxBidDiscount,
           status: ChitGroupStatus.ACTIVE,
@@ -315,6 +432,8 @@ export class ChitGroupsService {
               confirmedStartDate: dto.startDate,
               confirmedCapacity: dto.totalMonths,
               payoutRules: dto.payoutRuleNotes || 'Standard scheme rules',
+              commissionType: updated.commissionType,
+              isCommissionConfirmed: updated.isCommissionConfirmed,
             },
           },
         });
@@ -322,6 +441,52 @@ export class ChitGroupsService {
 
       return updated;
     });
+  }
+
+  /**
+   * Update commission settings explicitly and record compensating audit trail.
+   * Preserves historical scheme records, transactions, auctions and payments.
+   */
+  async updateCommission(groupId: string, dto: UpdateCommissionDto, performedById?: string) {
+    this.validateCommissionConfiguration(dto);
+    const group = await this.prisma.chitGroup.findUnique({ where: { id: groupId } });
+    if (!group) {
+      throw new NotFoundException(`Chit Group ${groupId} not found`);
+    }
+
+    const updated = await this.prisma.chitGroup.update({
+      where: { id: groupId },
+      data: {
+        commissionType: dto.commissionType,
+        commissionRate: dto.commissionRate !== undefined ? dto.commissionRate : group.commissionRate,
+        commissionAmount: dto.commissionAmount !== undefined ? dto.commissionAmount : group.commissionAmount,
+        commissionCalculationBase: dto.commissionCalculationBase ?? group.commissionCalculationBase,
+        commissionNotes: dto.commissionNotes ?? group.commissionNotes,
+        isCommissionConfirmed: Boolean(dto.isCommissionConfirmed),
+        foremanCommissionRate: dto.commissionRate ?? group.foremanCommissionRate,
+      },
+    });
+
+    if (performedById) {
+      await this.prisma.auditLog.create({
+        data: {
+          entityType: 'CHIT_GROUP',
+          entityId: groupId,
+          action: 'COMMISSION_CONFIG_UPDATED',
+          performedById,
+          metadata: {
+            groupCode: group.groupCode,
+            previousCommissionType: group.commissionType,
+            newCommissionType: dto.commissionType,
+            commissionRate: dto.commissionRate,
+            commissionAmount: dto.commissionAmount,
+            isCommissionConfirmed: dto.isCommissionConfirmed,
+          },
+        },
+      });
+    }
+
+    return updated;
   }
 
   /**

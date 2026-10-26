@@ -1,5 +1,15 @@
 import { apiClient } from './client';
 
+export type CommissionType =
+  | 'NOT_CONFIGURED'
+  | 'NO_COMMISSION'
+  | 'PERCENTAGE_OF_CHIT_VALUE'
+  | 'PERCENTAGE_OF_EACH_COLLECTION'
+  | 'FIXED_AMOUNT_PER_INSTALLMENT'
+  | 'FIXED_AMOUNT_PER_CHIT_GROUP'
+  | 'AUCTION_BASED_EARNINGS'
+  | 'CUSTOM_OTHER';
+
 export interface SchemeTemplate {
   templateId: string;
   name: string;
@@ -10,7 +20,10 @@ export interface SchemeTemplate {
   durationLabel: string;
   expectedMemberContribution: number;
   totalChitValue: number;
-  defaultCommissionRate: number;
+  defaultCommissionType?: CommissionType;
+  defaultCommissionRate?: number;
+  defaultCommissionAmount?: number;
+  commissionCalculationBase?: string;
   requiresMemberConfirmation: boolean;
   requiresPayoutConfirmation: boolean;
   notes: string;
@@ -21,6 +34,12 @@ export interface ActivateChitGroupPayload {
   startDate: string;
   totalMonths: number;
   foremanCommissionRate?: number;
+  commissionType?: CommissionType;
+  commissionRate?: number;
+  commissionAmount?: number;
+  commissionCalculationBase?: string;
+  commissionNotes?: string;
+  isCommissionConfirmed?: boolean;
   minBidDiscount?: number;
   maxBidDiscount?: number;
   payoutRuleNotes?: string;
@@ -39,6 +58,12 @@ export interface ChitGroup {
   startDate: string;
   expectedEndDate: string;
   foremanCommissionRate: number;
+  commissionType?: CommissionType;
+  commissionRate?: number;
+  commissionAmount?: number;
+  commissionCalculationBase?: string;
+  commissionNotes?: string;
+  isCommissionConfirmed?: boolean;
   minBidDiscount?: number;
   maxBidDiscount?: number;
   auctionFrequency: string;
@@ -94,5 +119,21 @@ export const chitGroupsApi = {
     apiClient<any>(`/chit-groups/${groupId}/enroll`, {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+
+  updateCommission: (
+    id: string,
+    payload: {
+      commissionType: CommissionType;
+      commissionRate?: number;
+      commissionAmount?: number;
+      commissionCalculationBase?: string;
+      commissionNotes?: string;
+      isCommissionConfirmed: boolean;
+    },
+  ) =>
+    apiClient<ChitGroup>(`/chit-groups/${id}/commission`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
     }),
 };

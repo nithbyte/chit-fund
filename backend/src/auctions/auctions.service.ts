@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { AuctionStatus } from '@prisma/client';
+import { AuctionStatus, CommissionType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RecordAuctionDto } from './dto/record-auction.dto.js';
 
@@ -80,7 +80,6 @@ export class AuctionsService {
 
     // Financial calculations
     const totalValue = Number(chitGroup.totalValue);
-    const commissionRate = Number(chitGroup.foremanCommissionRate);
     const winningBid = Number(dto.winningBidAmount);
 
     // Validate bid discount limits
@@ -91,7 +90,34 @@ export class AuctionsService {
       throw new BadRequestException(`Bid discount (₹${winningBid}) exceeds group ceiling (₹${chitGroup.maxBidDiscount})`);
     }
 
-    const foremanCommission = (totalValue * commissionRate) / 100;
+    let foremanCommission = 0;
+    // Commission is only charged if explicitly confirmed by owner and configured
+    if (
+      chitGroup.isCommissionConfirmed &&
+      chitGroup.commissionType !== CommissionType.NO_COMMISSION &&
+      chitGroup.commissionType !== CommissionType.NOT_CONFIGURED
+    ) {
+      if (chitGroup.commissionType === CommissionType.PERCENTAGE_OF_CHIT_VALUE) {
+        const rate = Number(chitGroup.commissionRate ?? chitGroup.foremanCommissionRate ?? 0);
+        foremanCommission = (totalValue * rate) / 100;
+      } else if (chitGroup.commissionType === CommissionType.PERCENTAGE_OF_EACH_COLLECTION) {
+        const rate = Number(chitGroup.commissionRate ?? 0);
+        const monthlyPool = Number(chitGroup.monthlyContribution) * chitGroup.totalMonths;
+        foremanCommission = Math.round(((monthlyPool * rate) / 100 / chitGroup.totalMonths) * 100) / 100;
+      } else if (chitGroup.commissionType === CommissionType.FIXED_AMOUNT_PER_INSTALLMENT) {
+        foremanCommission = Number(chitGroup.commissionAmount ?? 0);
+      } else if (chitGroup.commissionType === CommissionType.FIXED_AMOUNT_PER_CHIT_GROUP) {
+        foremanCommission = Math.round((Number(chitGroup.commissionAmount ?? 0) / chitGroup.totalMonths) * 100) / 100;
+      } else if (chitGroup.commissionType === CommissionType.AUCTION_BASED_EARNINGS) {
+        const rate = Number(chitGroup.commissionRate ?? chitGroup.foremanCommissionRate ?? 5.0);
+        foremanCommission = (totalValue * rate) / 100;
+      } else if (chitGroup.commissionType === CommissionType.CUSTOM_OTHER) {
+        foremanCommission = Number(chitGroup.commissionAmount ?? 0);
+      }
+    } else {
+      foremanCommission = 0;
+    }
+
     const dividendTotal = Math.max(0, winningBid - foremanCommission);
     const totalMembers = chitGroup.totalMonths;
     const dividendPerMember = Math.floor((dividendTotal / totalMembers) * 100) / 100;

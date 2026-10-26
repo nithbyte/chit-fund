@@ -17,6 +17,36 @@ export class ActivateChitGroupDto {
   @IsNumber()
   foremanCommissionRate?: number;
 
+  @ApiPropertyOptional({ example: 'PERCENTAGE_OF_CHIT_VALUE', description: 'Commission calculation type' })
+  @IsOptional()
+  @IsString()
+  commissionType?: string;
+
+  @ApiPropertyOptional({ example: 5.0, description: 'Commission rate percentage' })
+  @IsOptional()
+  @IsNumber()
+  commissionRate?: number;
+
+  @ApiPropertyOptional({ example: 500, description: 'Commission fixed amount in INR' })
+  @IsOptional()
+  @IsNumber()
+  commissionAmount?: number;
+
+  @ApiPropertyOptional({ example: 'CHIT_VALUE', description: 'Calculation base' })
+  @IsOptional()
+  @IsString()
+  commissionCalculationBase?: string;
+
+  @ApiPropertyOptional({ example: 'Agreed foreman fee', description: 'Commission notes' })
+  @IsOptional()
+  @IsString()
+  commissionNotes?: string;
+
+  @ApiPropertyOptional({ example: true, description: 'Commission confirmed flag' })
+  @IsOptional()
+  @IsBoolean()
+  isCommissionConfirmed?: boolean;
+
   @ApiPropertyOptional({ example: 10000, description: 'Minimum bid discount in INR' })
   @IsOptional()
   @IsNumber()

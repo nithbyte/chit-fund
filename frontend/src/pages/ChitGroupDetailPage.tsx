@@ -9,12 +9,15 @@ import {
   FileSpreadsheet,
   Clock,
   ShieldCheck,
+  Settings,
+  Percent,
 } from 'lucide-react';
-import { chitGroupsApi, type ActivateChitGroupPayload } from '../api/chit-groups';
+import { chitGroupsApi, type ActivateChitGroupPayload, type CommissionType } from '../api/chit-groups';
 import { customersApi } from '../api/customers';
 import { TopHeader } from '../components/layout/TopHeader';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { formatINR, formatDate, formatPhone } from '../utils/formatters';
+import { CommissionConfigSection } from '../components/chit-groups/CommissionConfigSection';
 
 export const ChitGroupDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +28,17 @@ export const ChitGroupDetailPage: React.FC = () => {
 
   const [isActivateModalOpen, setIsActivateModalOpen] = useState(false);
   const [activateError, setActivateError] = useState<string | null>(null);
+
+  const [isCommissionModalOpen, setIsCommissionModalOpen] = useState(false);
+  const [commissionError, setCommissionError] = useState<string | null>(null);
+  const [commissionForm, setCommissionForm] = useState({
+    commissionType: 'PERCENTAGE_OF_CHIT_VALUE' as CommissionType,
+    commissionRate: 5.0 as number | undefined,
+    commissionAmount: 0 as number | undefined,
+    commissionCalculationBase: 'CHIT_VALUE',
+    commissionNotes: '',
+    isCommissionConfirmed: false,
+  });
 
   const [enrollForm, setEnrollForm] = useState({
     customerId: '',
@@ -38,6 +52,12 @@ export const ChitGroupDetailPage: React.FC = () => {
     startDate: new Date().toISOString().split('T')[0],
     totalMonths: 20,
     foremanCommissionRate: 5.0,
+    commissionType: 'PERCENTAGE_OF_CHIT_VALUE',
+    commissionRate: 5.0,
+    commissionAmount: 0,
+    commissionCalculationBase: 'CHIT_VALUE',
+    commissionNotes: '',
+    isCommissionConfirmed: false,
     minBidDiscount: 10000,
     maxBidDiscount: 40000,
     payoutRuleNotes: '',
@@ -86,6 +106,18 @@ export const ChitGroupDetailPage: React.FC = () => {
     },
   });
 
+  const updateCommissionMutation = useMutation({
+    mutationFn: (data: typeof commissionForm) => chitGroupsApi.updateCommission(id!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chitGroup', id] });
+      queryClient.invalidateQueries({ queryKey: ['chitGroups'] });
+      setIsCommissionModalOpen(false);
+    },
+    onError: (err: any) => {
+      setCommissionError(err.message || 'Failed to update commission settings');
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50">
@@ -115,11 +147,30 @@ export const ChitGroupDetailPage: React.FC = () => {
     (t) => !enrolledTickets.includes(t),
   );
 
+  const openCommissionModal = () => {
+    setCommissionForm({
+      commissionType: group.commissionType || 'PERCENTAGE_OF_CHIT_VALUE',
+      commissionRate: group.commissionRate ?? group.foremanCommissionRate ?? 5.0,
+      commissionAmount: group.commissionAmount ? Number(group.commissionAmount) : 0,
+      commissionCalculationBase: group.commissionCalculationBase || 'CHIT_VALUE',
+      commissionNotes: group.commissionNotes || '',
+      isCommissionConfirmed: Boolean(group.isCommissionConfirmed),
+    });
+    setCommissionError(null);
+    setIsCommissionModalOpen(true);
+  };
+
   const openActivationModal = () => {
     setActivateForm({
       startDate: group.startDate.split('T')[0],
       totalMonths: group.totalMonths,
       foremanCommissionRate: group.foremanCommissionRate ?? 5.0,
+      commissionType: group.commissionType || 'PERCENTAGE_OF_CHIT_VALUE',
+      commissionRate: group.commissionRate ?? group.foremanCommissionRate ?? 5.0,
+      commissionAmount: group.commissionAmount ? Number(group.commissionAmount) : 0,
+      commissionCalculationBase: group.commissionCalculationBase || 'CHIT_VALUE',
+      commissionNotes: group.commissionNotes || '',
+      isCommissionConfirmed: Boolean(group.isCommissionConfirmed),
       minBidDiscount: group.minBidDiscount ?? (isWeekly ? 0 : 10000),
       maxBidDiscount: group.maxBidDiscount ?? (isWeekly ? 0 : 40000),
       payoutRuleNotes:
@@ -229,11 +280,46 @@ export const ChitGroupDetailPage: React.FC = () => {
             </div>
 
             <div>
-              <span className="text-slate-500 block">Foreman Commission</span>
-              <span className="font-bold text-slate-900 text-sm tabular-nums">
-                {group.foremanCommissionRate}% (₹
-                {(group.totalValue * (group.foremanCommissionRate / 100)).toLocaleString('en-IN')})
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 block">Commission & Earnings</span>
+                <button
+                  type="button"
+                  onClick={openCommissionModal}
+                  className="text-[10px] text-teal-700 font-bold hover:underline inline-flex items-center gap-0.5"
+                >
+                  <Settings size={10} />
+                  <span>Configure</span>
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="font-bold text-slate-900 text-sm tabular-nums">
+                  {group.commissionType === 'NO_COMMISSION'
+                    ? 'No Commission (₹0)'
+                    : group.commissionType === 'FIXED_AMOUNT_PER_INSTALLMENT'
+                      ? `₹${Number(group.commissionAmount || 0).toLocaleString('en-IN')} / cycle`
+                      : group.commissionType === 'FIXED_AMOUNT_PER_CHIT_GROUP'
+                        ? `₹${Number(group.commissionAmount || 0).toLocaleString('en-IN')} Flat Fee`
+                        : group.commissionType === 'PERCENTAGE_OF_EACH_COLLECTION'
+                          ? `${group.commissionRate}% of collections`
+                          : group.commissionType === 'AUCTION_BASED_EARNINGS'
+                            ? `Auction Margin (~${group.commissionRate ?? 5}%)`
+                            : group.commissionType === 'CUSTOM_OTHER'
+                              ? 'Custom Rules'
+                              : `${group.commissionRate ?? group.foremanCommissionRate}% (₹${(
+                                  group.totalValue *
+                                  ((group.commissionRate ?? group.foremanCommissionRate) / 100)
+                                ).toLocaleString('en-IN')})`}
+                </span>
+                {group.isCommissionConfirmed ? (
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    Confirmed
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                    Draft
+                  </span>
+                )}
+              </div>
             </div>
 
             <div>
@@ -407,45 +493,51 @@ export const ChitGroupDetailPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Foreman Commission (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="10"
-                    value={activateForm.foremanCommissionRate}
-                    onChange={(e) =>
-                      setActivateForm({
-                        ...activateForm,
-                        foremanCommissionRate: Number(e.target.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Max Bid Discount (₹)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={activateForm.maxBidDiscount}
-                    onChange={(e) =>
-                      setActivateForm({
-                        ...activateForm,
-                        maxBidDiscount: Number(e.target.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none font-bold"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Max Bid Discount (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={activateForm.maxBidDiscount}
+                  onChange={(e) =>
+                    setActivateForm({
+                      ...activateForm,
+                      maxBidDiscount: Number(e.target.value),
+                    })
+                  }
+                  className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none font-bold"
+                />
               </div>
+
+              {/* Commission & Earnings Configuration Section in Activation */}
+              <CommissionConfigSection
+                value={{
+                  commissionType: (activateForm.commissionType as CommissionType) || 'PERCENTAGE_OF_CHIT_VALUE',
+                  commissionRate: activateForm.commissionRate,
+                  commissionAmount: activateForm.commissionAmount,
+                  commissionCalculationBase: activateForm.commissionCalculationBase,
+                  commissionNotes: activateForm.commissionNotes,
+                  isCommissionConfirmed: activateForm.isCommissionConfirmed ?? false,
+                }}
+                onChange={(config) =>
+                  setActivateForm({
+                    ...activateForm,
+                    commissionType: config.commissionType,
+                    commissionRate: config.commissionRate,
+                    commissionAmount: config.commissionAmount,
+                    commissionCalculationBase: config.commissionCalculationBase,
+                    commissionNotes: config.commissionNotes,
+                    isCommissionConfirmed: config.isCommissionConfirmed,
+                    foremanCommissionRate: config.commissionRate ?? activateForm.foremanCommissionRate,
+                  })
+                }
+                totalChitValue={group.totalValue}
+                installmentAmount={group.monthlyContribution}
+                totalPeriods={activateForm.totalMonths}
+                isWeekly={isWeekly}
+              />
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -617,6 +709,86 @@ export const ChitGroupDetailPage: React.FC = () => {
                   className="px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs transition-colors disabled:opacity-50 shadow-xs"
                 >
                   {enrollMutation.isPending ? 'Enrolling...' : 'Confirm Ticket Slot'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Standalone Commission & Earnings Configuration Modal */}
+      {isCommissionModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
+                  <Percent size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Configure Commission & Earnings
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {group.name} ({group.groupCode})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCommissionModalOpen(false)}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {commissionError && (
+              <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800 flex items-center gap-2">
+                <AlertCircle size={15} className="shrink-0" />
+                <span>{commissionError}</span>
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setCommissionError(null);
+                updateCommissionMutation.mutate(commissionForm);
+              }}
+              className="space-y-4 mt-4"
+            >
+              <CommissionConfigSection
+                value={commissionForm}
+                onChange={(val) =>
+                  setCommissionForm({
+                    commissionType: val.commissionType,
+                    commissionRate: val.commissionRate,
+                    commissionAmount: val.commissionAmount,
+                    commissionCalculationBase: val.commissionCalculationBase || 'CHIT_VALUE',
+                    commissionNotes: val.commissionNotes || '',
+                    isCommissionConfirmed: val.isCommissionConfirmed,
+                  })
+                }
+                totalChitValue={group.totalValue}
+                installmentAmount={group.monthlyContribution}
+                totalPeriods={group.totalMonths}
+                isWeekly={isWeekly}
+              />
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCommissionModalOpen(false)}
+                  className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateCommissionMutation.isPending}
+                  className="px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs transition-colors disabled:opacity-50 shadow-xs"
+                >
+                  {updateCommissionMutation.isPending ? 'Saving...' : 'Save & Confirm Commission'}
                 </button>
               </div>
             </form>

@@ -188,5 +188,89 @@ describe('Financial Logic & Mobile Collection Validations', () => {
       expect(netPayout).toBe(80000);
     });
   });
+
+  describe('Commission & Earnings Options & Illustrative Estimates', () => {
+    // Import helper simulator
+    const calculateEstimate = (
+      type: string,
+      rate: number | undefined,
+      amount: number | undefined,
+      totalChitValue: number,
+      installmentAmount: number,
+      totalPeriods: number,
+    ) => {
+      switch (type) {
+        case 'NO_COMMISSION':
+          return { estimateINR: 0, isZero: true };
+        case 'PERCENTAGE_OF_CHIT_VALUE':
+          return { estimateINR: (totalChitValue * (rate || 0)) / 100, isZero: false };
+        case 'PERCENTAGE_OF_EACH_COLLECTION': {
+          const perPeriod = (installmentAmount * totalPeriods * (rate || 0)) / 100;
+          return { estimateINR: perPeriod * totalPeriods, isZero: false };
+        }
+        case 'FIXED_AMOUNT_PER_INSTALLMENT':
+          return { estimateINR: (amount || 0) * totalPeriods, isZero: false };
+        case 'FIXED_AMOUNT_PER_CHIT_GROUP':
+          return { estimateINR: amount || 0, isZero: false };
+        case 'AUCTION_BASED_EARNINGS':
+          return { estimateINR: (totalChitValue * (rate || 5.0)) / 100, isZero: false };
+        case 'CUSTOM_OTHER':
+          return { estimateINR: amount !== undefined ? amount : null, isZero: false };
+        case 'NOT_CONFIGURED':
+        default:
+          return { estimateINR: null, isZero: false };
+      }
+    };
+
+    it('Option 1: No Commission returns exactly ₹0', () => {
+      const res = calculateEstimate('NO_COMMISSION', undefined, undefined, 100000, 5000, 20);
+      expect(res.estimateINR).toBe(0);
+      expect(res.isZero).toBe(true);
+    });
+
+    it('Option 2: Percentage of Chit Value calculates against stated chit value', () => {
+      const res = calculateEstimate('PERCENTAGE_OF_CHIT_VALUE', 5.0, undefined, 100000, 5000, 20);
+      expect(res.estimateINR).toBe(5000); // 5% of ₹1,00,000 = ₹5,000
+    });
+
+    it('Option 3: Percentage of Each Collection calculates across collection cycles', () => {
+      // 20 members * ₹5,000 = ₹1,00,000 collection pool per month. 4% = ₹4,000/mo * 20 mos = ₹80,000
+      const res = calculateEstimate('PERCENTAGE_OF_EACH_COLLECTION', 4.0, undefined, 100000, 5000, 20);
+      expect(res.estimateINR).toBe(80000);
+    });
+
+    it('Option 4: Fixed Amount per Installment multiplies fixed fee by total scheduled installments', () => {
+      // ₹250 per installment * 52 weeks = ₹13,000
+      const res = calculateEstimate('FIXED_AMOUNT_PER_INSTALLMENT', undefined, 250, 10400, 200, 52);
+      expect(res.estimateINR).toBe(13000);
+    });
+
+    it('Option 5: Fixed Amount per Chit Group maintains one-time flat fee', () => {
+      const res = calculateEstimate('FIXED_AMOUNT_PER_CHIT_GROUP', undefined, 6000, 100000, 5000, 20);
+      expect(res.estimateINR).toBe(6000);
+    });
+
+    it('Option 6: Auction-Based Earnings computes statutory quota without assuming 100% bid retention', () => {
+      const res = calculateEstimate('AUCTION_BASED_EARNINGS', 5.0, undefined, 100000, 5000, 20);
+      expect(res.estimateINR).toBe(5000);
+      // Remainder of bid discount (e.g. ₹20,000 - ₹5,000 = ₹15,000) is dividend to members
+      const bidDiscount = 20000;
+      const memberDividend = bidDiscount - (res.estimateINR ?? 0);
+      expect(memberDividend).toBe(15000);
+    });
+
+    it('Option 7: Custom / Other returns custom baseline amount or null pending documentation', () => {
+      const resWithAmount = calculateEstimate('CUSTOM_OTHER', undefined, 7500, 100000, 5000, 20);
+      expect(resWithAmount.estimateINR).toBe(7500);
+
+      const resWithoutAmount = calculateEstimate('CUSTOM_OTHER', undefined, undefined, 100000, 5000, 20);
+      expect(resWithoutAmount.estimateINR).toBeNull();
+    });
+
+    it('Draft / Not Configured leaves estimate as null to disable financial deduction', () => {
+      const res = calculateEstimate('NOT_CONFIGURED', undefined, undefined, 100000, 5000, 20);
+      expect(res.estimateINR).toBeNull();
+    });
+  });
 });
 

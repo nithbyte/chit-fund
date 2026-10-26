@@ -12,10 +12,11 @@ import {
   Clock,
   ShieldAlert,
 } from 'lucide-react';
-import { chitGroupsApi, type SchemeTemplate } from '../api/chit-groups';
+import { chitGroupsApi, type SchemeTemplate, type CommissionType } from '../api/chit-groups';
 import { TopHeader } from '../components/layout/TopHeader';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { formatINR } from '../utils/formatters';
+import { CommissionConfigSection } from '../components/chit-groups/CommissionConfigSection';
 
 export const ChitGroupsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -32,6 +33,12 @@ export const ChitGroupsPage: React.FC = () => {
     totalMonths: 20,
     startDate: new Date().toISOString().split('T')[0],
     foremanCommissionRate: 5.0,
+    commissionType: 'NOT_CONFIGURED' as CommissionType,
+    commissionRate: 5.0 as number | undefined,
+    commissionAmount: 0 as number | undefined,
+    commissionCalculationBase: 'CHIT_VALUE',
+    commissionNotes: '',
+    isCommissionConfirmed: false,
     minBidDiscount: 10000,
     maxBidDiscount: 40000,
     auctionFrequency: 'MONTHLY' as 'MONTHLY' | 'WEEKLY',
@@ -64,6 +71,12 @@ export const ChitGroupsPage: React.FC = () => {
         totalMonths: 20,
         startDate: new Date().toISOString().split('T')[0],
         foremanCommissionRate: 5.0,
+        commissionType: 'NOT_CONFIGURED',
+        commissionRate: 5.0,
+        commissionAmount: 0,
+        commissionCalculationBase: 'CHIT_VALUE',
+        commissionNotes: '',
+        isCommissionConfirmed: false,
         minBidDiscount: 10000,
         maxBidDiscount: 40000,
         auctionFrequency: 'MONTHLY',
@@ -91,7 +104,16 @@ export const ChitGroupsPage: React.FC = () => {
       monthlyContribution: tmpl.installmentAmount,
       totalMonths: tmpl.durationPeriods,
       startDate: new Date().toISOString().split('T')[0],
-      foremanCommissionRate: tmpl.defaultCommissionRate,
+      foremanCommissionRate: tmpl.defaultCommissionRate ?? 5.0,
+      commissionType:
+        tmpl.defaultCommissionType ||
+        (isWeekly ? 'FIXED_AMOUNT_PER_INSTALLMENT' : 'PERCENTAGE_OF_CHIT_VALUE'),
+      commissionRate: tmpl.defaultCommissionRate ?? (isWeekly ? 0 : 5.0),
+      commissionAmount: tmpl.defaultCommissionAmount ?? 0,
+      commissionCalculationBase:
+        tmpl.commissionCalculationBase || (isWeekly ? 'INSTALLMENT_AMOUNT' : 'CHIT_VALUE'),
+      commissionNotes: tmpl.notes || '',
+      isCommissionConfirmed: false, // Owner must review and confirm terms
       minBidDiscount: isWeekly ? 0 : 10000,
       maxBidDiscount: isWeekly ? 0 : 40000,
       auctionFrequency: tmpl.frequency,
@@ -518,37 +540,46 @@ export const ChitGroupsPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Start Date *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.startDate}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Foreman Commission (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="10"
-                    value={formData.foremanCommissionRate}
-                    onChange={(e) =>
-                      setFormData({ ...formData, foremanCommissionRate: Number(e.target.value) })
-                    }
-                    className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none font-bold tabular-nums"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Start Date *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formData.startDate}
+                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                  className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                />
               </div>
+
+              {/* Commission & Earnings Configuration Section */}
+              <CommissionConfigSection
+                value={{
+                  commissionType: formData.commissionType,
+                  commissionRate: formData.commissionRate,
+                  commissionAmount: formData.commissionAmount,
+                  commissionCalculationBase: formData.commissionCalculationBase,
+                  commissionNotes: formData.commissionNotes,
+                  isCommissionConfirmed: formData.isCommissionConfirmed,
+                }}
+                onChange={(config) =>
+                  setFormData({
+                    ...formData,
+                    commissionType: config.commissionType,
+                    commissionRate: config.commissionRate,
+                    commissionAmount: config.commissionAmount,
+                    commissionCalculationBase: config.commissionCalculationBase || 'CHIT_VALUE',
+                    commissionNotes: config.commissionNotes || '',
+                    isCommissionConfirmed: config.isCommissionConfirmed,
+                    foremanCommissionRate: config.commissionRate ?? formData.foremanCommissionRate,
+                  })
+                }
+                totalChitValue={formData.totalValue}
+                installmentAmount={formData.monthlyContribution}
+                totalPeriods={formData.totalMonths}
+                isWeekly={formData.auctionFrequency === 'WEEKLY'}
+              />
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
