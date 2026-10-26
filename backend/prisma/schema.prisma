@@ -1,0 +1,320 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+}
+
+enum ChitType {
+  AUCTION_BASED
+  FIXED_INSTALLMENT
+}
+
+enum ChitGroupStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum MembershipStatus {
+  ACTIVE
+  SURRENDERED
+  DEFAULTED
+  TRANSFERRED
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CHEQUE
+}
+
+enum PaymentStatus {
+  COMPLETED
+  REVERSED
+  PENDING
+}
+
+enum AuctionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum PayoutStatus {
+  PENDING_APPROVAL
+  DISBURSED
+  CANCELLED
+}
+
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  email        String     @unique
+  username     String     @unique
+  passwordHash String     @map("password_hash")
+  fullName     String     @map("full_name")
+  role         Role       @default(OWNER)
+  phone        String?
+  isActive     Boolean    @default(true) @map("is_active")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  paymentsReceived Payment[]  @relation("ReceivedPayments")
+  payoutsDisbursed Payout[]   @relation("DisbursedPayouts")
+  expensesRecorded Expense[]  @relation("RecordedExpenses")
+  auditLogs        AuditLog[] @relation("PerformedAuditLogs")
+
+  @@map("users")
+}
+
+model Customer {
+  id                  String       @id @default(uuid()) @db.Uuid
+  customerCode        String       @unique @map("customer_code")
+  fullName            String       @map("full_name")
+  phone               String
+  alternatePhone      String?      @map("alternate_phone")
+  email               String?
+  address             String?
+  identityProofType   String?      @map("identity_proof_type")
+  identityProofNumber String?      @map("identity_proof_number")
+  notes               String?
+  isActive            Boolean      @default(true) @map("is_active")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  memberships Membership[]
+  payments    Payment[]
+
+  @@index([phone])
+  @@index([fullName])
+  @@map("customers")
+}
+
+model ChitGroup {
+  id                    String          @id @default(uuid()) @db.Uuid
+  groupCode             String          @unique @map("group_code")
+  name                  String
+  chitType              ChitType        @default(AUCTION_BASED) @map("chit_type")
+  totalValue            Decimal         @map("total_value") @db.Decimal(12, 2)
+  monthlyContribution   Decimal         @map("monthly_contribution") @db.Decimal(12, 2)
+  totalMonths           Int             @map("total_months")
+  currentMonth          Int             @default(1) @map("current_month")
+  startDate             DateTime        @map("start_date")
+  expectedEndDate       DateTime        @map("expected_end_date")
+  foremanCommissionRate Decimal         @default(5.00) @map("foreman_commission_rate") @db.Decimal(5, 2)
+  minBidDiscount        Decimal?        @map("min_bid_discount") @db.Decimal(12, 2)
+  maxBidDiscount        Decimal?        @map("max_bid_discount") @db.Decimal(12, 2)
+  auctionFrequency      String          @default("MONTHLY") @map("auction_frequency")
+  auctionDayOfMonth     Int?            @map("auction_day_of_month")
+  status                ChitGroupStatus @default(ACTIVE)
+  notes                 String?
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  memberships  Membership[]
+  installments Installment[]
+  auctions     Auction[]
+  payouts      Payout[]
+
+  @@index([status])
+  @@map("chit_groups")
+}
+
+model Membership {
+  id           String           @id @default(uuid()) @db.Uuid
+  chitGroupId  String           @map("chit_group_id") @db.Uuid
+  customerId   String           @map("customer_id") @db.Uuid
+  ticketNumber Int              @map("ticket_number")
+  joinedDate   DateTime         @default(now()) @map("joined_date")
+  isPrized     Boolean          @default(false) @map("is_prized")
+  prizedMonth  Int?             @map("prized_month")
+  prizeAmount  Decimal?         @map("prize_amount") @db.Decimal(12, 2)
+  nomineeName  String?          @map("nominee_name")
+  nomineePhone String?          @map("nominee_phone")
+  status       MembershipStatus @default(ACTIVE)
+  notes        String?
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  chitGroup          ChitGroup           @relation(fields: [chitGroupId], references: [id], onDelete: Restrict)
+  customer           Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  paymentAllocations PaymentAllocation[]
+  wonAuctions        Auction[]           @relation("WinningMembership")
+  payouts            Payout[]
+
+  @@unique([chitGroupId, ticketNumber])
+  @@index([customerId])
+  @@index([chitGroupId])
+  @@map("memberships")
+}
+
+model Installment {
+  id                String   @id @default(uuid()) @db.Uuid
+  chitGroupId       String   @map("chit_group_id") @db.Uuid
+  monthNumber       Int      @map("month_number")
+  dueDate           DateTime @map("due_date")
+  baseAmount        Decimal  @map("base_amount") @db.Decimal(12, 2)
+  dividendPerTicket Decimal  @default(0.00) @map("dividend_per_ticket") @db.Decimal(12, 2)
+  payableAmount     Decimal  @map("payable_amount") @db.Decimal(12, 2)
+  auctionId         String?  @map("auction_id") @db.Uuid
+  notes             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  chitGroup          ChitGroup           @relation(fields: [chitGroupId], references: [id], onDelete: Restrict)
+  auction            Auction?            @relation(fields: [auctionId], references: [id], onDelete: SetNull)
+  paymentAllocations PaymentAllocation[]
+
+  @@unique([chitGroupId, monthNumber])
+  @@index([dueDate])
+  @@map("installments")
+}
+
+model Payment {
+  id             String        @id @default(uuid()) @db.Uuid
+  receiptNumber  String        @unique @map("receipt_number")
+  customerId     String        @map("customer_id") @db.Uuid
+  amount         Decimal       @db.Decimal(12, 2)
+  paymentDate    DateTime      @map("payment_date")
+  paymentMode    PaymentMode   @default(CASH) @map("payment_mode")
+  transactionRef String?       @map("transaction_ref")
+  notes          String?
+  receivedById   String        @map("received_by_id") @db.Uuid
+  status         PaymentStatus @default(COMPLETED)
+  isReversed     Boolean       @default(false) @map("is_reversed")
+  reversalReason String?       @map("reversal_reason")
+  reversedAt     DateTime?     @map("reversed_at")
+  reversedById   String?       @map("reversed_by_id") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  customer    Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  receivedBy  User                @relation("ReceivedPayments", fields: [receivedById], references: [id], onDelete: Restrict)
+  allocations PaymentAllocation[]
+
+  @@index([customerId])
+  @@index([paymentDate])
+  @@index([receiptNumber])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id              String   @id @default(uuid()) @db.Uuid
+  paymentId       String   @map("payment_id") @db.Uuid
+  membershipId    String   @map("membership_id") @db.Uuid
+  installmentId   String   @map("installment_id") @db.Uuid
+  allocatedAmount Decimal  @map("allocated_amount") @db.Decimal(12, 2)
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  payment     Payment     @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  membership  Membership  @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  installment Installment @relation(fields: [installmentId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, installmentId, membershipId])
+  @@index([membershipId])
+  @@index([installmentId])
+  @@map("payment_allocations")
+}
+
+model Auction {
+  id                  String        @id @default(uuid()) @db.Uuid
+  chitGroupId         String        @map("chit_group_id") @db.Uuid
+  monthNumber         Int           @map("month_number")
+  auctionDate         DateTime      @map("auction_date")
+  winningBidAmount    Decimal       @map("winning_bid_amount") @db.Decimal(12, 2)
+  foremanCommission   Decimal       @map("foreman_commission") @db.Decimal(12, 2)
+  dividendTotal       Decimal       @map("dividend_total") @db.Decimal(12, 2)
+  dividendPerMember   Decimal       @map("dividend_per_member") @db.Decimal(12, 2)
+  winningMembershipId String?       @map("winning_membership_id") @db.Uuid
+  netPrizeAmount      Decimal       @map("net_prize_amount") @db.Decimal(12, 2)
+  status              AuctionStatus @default(COMPLETED)
+  notes               String?
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  chitGroup         ChitGroup     @relation(fields: [chitGroupId], references: [id], onDelete: Restrict)
+  winningMembership Membership?   @relation("WinningMembership", fields: [winningMembershipId], references: [id], onDelete: SetNull)
+  installments      Installment[]
+  payouts           Payout[]
+
+  @@unique([chitGroupId, monthNumber])
+  @@map("auctions")
+}
+
+model Payout {
+  id               String       @id @default(uuid()) @db.Uuid
+  chitGroupId      String       @map("chit_group_id") @db.Uuid
+  membershipId     String       @map("membership_id") @db.Uuid
+  auctionId        String       @map("auction_id") @db.Uuid
+  voucherNumber    String       @unique @map("voucher_number")
+  grossPrizeAmount Decimal      @map("gross_prize_amount") @db.Decimal(12, 2)
+  deductionAmount  Decimal      @default(0.00) @map("deduction_amount") @db.Decimal(12, 2)
+  netPaidAmount    Decimal      @map("net_paid_amount") @db.Decimal(12, 2)
+  payoutDate       DateTime     @map("payout_date")
+  paymentMode      PaymentMode  @default(BANK_TRANSFER) @map("payment_mode")
+  transactionRef   String?      @map("transaction_ref")
+  guarantorName1   String?      @map("guarantor_name_1")
+  guarantorPhone1  String?      @map("guarantor_phone_1")
+  guarantorName2   String?      @map("guarantor_name_2")
+  guarantorPhone2  String?      @map("guarantor_phone_2")
+  status           PayoutStatus @default(DISBURSED)
+  disbursedById    String       @map("disbursed_by_id") @db.Uuid
+  notes            String?
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  chitGroup   ChitGroup  @relation(fields: [chitGroupId], references: [id], onDelete: Restrict)
+  membership  Membership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  auction     Auction    @relation(fields: [auctionId], references: [id], onDelete: Restrict)
+  disbursedBy User       @relation("DisbursedPayouts", fields: [disbursedById], references: [id], onDelete: Restrict)
+
+  @@index([membershipId])
+  @@index([payoutDate])
+  @@map("payouts")
+}
+
+model Expense {
+  id           String      @id @default(uuid()) @db.Uuid
+  title        String
+  category     String
+  amount       Decimal     @db.Decimal(12, 2)
+  expenseDate  DateTime    @map("expense_date")
+  paymentMode  PaymentMode @default(CASH) @map("payment_mode")
+  reference    String?
+  notes        String?
+  recordedById String      @map("recorded_by_id") @db.Uuid
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  recordedBy User @relation("RecordedExpenses", fields: [recordedById], references: [id], onDelete: Restrict)
+
+  @@index([expenseDate])
+  @@map("expenses")
+}
+
+model AuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  entityType    String   @map("entity_type")
+  entityId      String   @map("entity_id")
+  action        String
+  performedById String   @map("performed_by_id") @db.Uuid
+  metadata      Json?
+  timestamp     DateTime @default(now())
+
+  performedBy User @relation("PerformedAuditLogs", fields: [performedById], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
