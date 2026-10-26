@@ -13,6 +13,9 @@ export interface PendingInstallment {
   paidAlready: number;
   dueAmount: number;
   isOverdue?: boolean;
+  isWeekly?: boolean;
+  periodLabel?: string;
+  frequency?: string;
 }
 
 export interface CustomerMembershipSummary {

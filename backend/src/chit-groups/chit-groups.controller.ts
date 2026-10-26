@@ -1,9 +1,12 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
+import { CurrentUser } from '../auth/current-user.decorator.js';
+import type { AuthenticatedUser } from '../auth/current-user.decorator.js';
 import { ChitGroupsService } from './chit-groups.service.js';
 import { CreateChitGroupDto } from './dto/create-chit-group.dto.js';
 import { EnrollMemberDto } from './dto/enroll-member.dto.js';
+import { ActivateChitGroupDto } from './dto/activate-chit-group.dto.js';
 
 @ApiTags('Chit Groups')
 @ApiBearerAuth()
@@ -11,6 +14,12 @@ import { EnrollMemberDto } from './dto/enroll-member.dto.js';
 @Controller('chit-groups')
 export class ChitGroupsController {
   constructor(private readonly chitGroupsService: ChitGroupsService) {}
+
+  @Get('templates')
+  @ApiOperation({ summary: 'Get pre-configured scheme templates (Diwali Weekly, ₹1 Lakh Monthly)' })
+  async getTemplates() {
+    return this.chitGroupsService.getSchemeTemplates();
+  }
 
   @Get()
   @ApiOperation({ summary: 'List all chit groups with vacancy counts and status' })
@@ -28,8 +37,28 @@ export class ChitGroupsController {
   @Post()
   @ApiOperation({ summary: 'Create a new chit group and auto-generate installment schedule' })
   @ApiResponse({ status: 201, description: 'Chit group successfully created' })
-  async create(@Body() createChitGroupDto: CreateChitGroupDto) {
-    return this.chitGroupsService.create(createChitGroupDto);
+  async create(
+    @Body() createChitGroupDto: CreateChitGroupDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.chitGroupsService.create(createChitGroupDto, user?.id);
+  }
+
+  @Post(':id/activate')
+  @ApiOperation({ summary: 'Confirm unconfirmed member capacity, start date, and payout rules to activate group' })
+  @ApiResponse({ status: 200, description: 'Chit group activated with confirmed schedule' })
+  async activate(
+    @Param('id') id: string,
+    @Body() dto: ActivateChitGroupDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.chitGroupsService.activateGroup(id, dto, user?.id);
+  }
+
+  @Post(':id/generate-schedule')
+  @ApiOperation({ summary: 'Idempotently generate missing installments without duplicating existing records' })
+  async generateSchedule(@Param('id') id: string) {
+    return this.chitGroupsService.generateSchedule(id);
   }
 
   @Post(':id/enroll')

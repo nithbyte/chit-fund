@@ -7,9 +7,17 @@ export class ReconciliationService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getDailyReport(dateStr?: string) {
-    const targetDate = dateStr ? new Date(dateStr) : new Date();
-    const dayStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0, 0);
-    const dayEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999);
+    let dayStart: Date;
+    let dayEnd: Date;
+    if (dateStr && dateStr.includes('-')) {
+      const parts = dateStr.split('T')[0].split('-').map(Number);
+      dayStart = new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
+      dayEnd = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999);
+    } else {
+      const targetDate = new Date();
+      dayStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0, 0);
+      dayEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999);
+    }
 
     // 1. Fetch all collections recorded on this day
     const payments = await this.prisma.payment.findMany({

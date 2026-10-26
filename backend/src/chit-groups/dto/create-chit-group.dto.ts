@@ -56,6 +56,16 @@ export class CreateChitGroupDto {
   @IsInt()
   auctionDayOfMonth?: number;
 
+  @ApiPropertyOptional({ example: 'MONTHLY', enum: ['MONTHLY', 'WEEKLY'], description: 'Installment & auction frequency' })
+  @IsOptional()
+  @IsString()
+  auctionFrequency?: string;
+
+  @ApiPropertyOptional({ example: 'PLANNED', enum: ['PLANNED', 'ACTIVE'], description: 'Chit group lifecycle status' })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
   @ApiPropertyOptional({ example: 'Monthly auction chit with 20 members.' })
   @IsOptional()
   @IsString()

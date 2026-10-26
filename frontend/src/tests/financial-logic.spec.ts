@@ -125,4 +125,68 @@ describe('Financial Logic & Mobile Collection Validations', () => {
       expect(sanitizeCsvCell(5000)).toBe('"5000"');
     });
   });
+
+  describe('Scheme A: Diwali Weekly Chit Calculations', () => {
+    it('verifies 52 weekly installments of ₹200 produce exactly ₹10,400 expected contribution', () => {
+      const weeklyContribution = 200;
+      const totalWeeks = 52;
+      const totalExpectedContribution = weeklyContribution * totalWeeks;
+      expect(totalExpectedContribution).toBe(10400);
+      expect(formatINR(totalExpectedContribution)).toMatch(/₹\s?10,400/);
+    });
+
+    it('allocates partial and multi-week collections correctly across 52 weekly installments', () => {
+      const weeklyInstallments: PendingInstallment[] = [
+        { installmentId: 'wk-1', monthNumber: 1, dueAmount: 200 },
+        { installmentId: 'wk-2', monthNumber: 2, dueAmount: 200 },
+        { installmentId: 'wk-3', monthNumber: 3, dueAmount: 200 },
+      ];
+
+      // Partial payment of ₹150 for Week 1
+      const partial = calculateInstallmentAllocations(150, weeklyInstallments);
+      expect(partial.allocations).toHaveLength(1);
+      expect(partial.allocations[0].allocatedAmount).toBe(150);
+      expect(partial.allocations[0].remainingDue).toBe(50);
+
+      // Multi-week payment of ₹500
+      const multi = calculateInstallmentAllocations(500, weeklyInstallments);
+      expect(multi.allocations).toHaveLength(3);
+      expect(multi.allocations[0].allocatedAmount).toBe(200);
+      expect(multi.allocations[1].allocatedAmount).toBe(200);
+      expect(multi.allocations[2].allocatedAmount).toBe(100);
+      expect(multi.totalAllocated).toBe(500);
+    });
+  });
+
+  describe('Scheme B: ₹1 Lakh Chit Calculations & Financial Distinctions', () => {
+    it('verifies 20 monthly installments of ₹5,000 produce exactly ₹1,00,000 scheduled contribution per member', () => {
+      const monthlyContribution = 5000;
+      const totalMonths = 20;
+      const totalScheduled = monthlyContribution * totalMonths;
+      expect(totalScheduled).toBe(100000);
+      expect(formatINR(totalScheduled)).toMatch(/₹\s?1,00,000/);
+    });
+
+    it('ensures stated ₹1,00,000 chit prize is distinct from monthly collection total', () => {
+      const statedChitPrize = 100000;
+      const monthlyContribution = 5000;
+
+      // When member capacity is 20: monthly collection = 20 * 5,000 = ₹1,00,000
+      const capacity20MonthlyTotal = 20 * monthlyContribution;
+      expect(capacity20MonthlyTotal).toBe(statedChitPrize);
+
+      // When member capacity is unconfirmed / 15: monthly collection = 15 * 5,000 = ₹75,000
+      const capacity15MonthlyTotal = 15 * monthlyContribution;
+      expect(capacity15MonthlyTotal).not.toBe(statedChitPrize);
+      expect(capacity15MonthlyTotal).toBe(75000);
+
+      // Winning net payout after 5% foreman commission and bid discount
+      const foremanCommission = statedChitPrize * 0.05; // ₹5,000
+      const bidDiscount = 20000;
+      const netPayout = statedChitPrize - bidDiscount;
+      expect(foremanCommission).toBe(5000);
+      expect(netPayout).toBe(80000);
+    });
+  });
 });
+

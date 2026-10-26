@@ -147,7 +147,77 @@ async function main() {
     },
   });
 
-  console.log('✅ Seeded 3 Chit Groups (Auction & Fixed types)');
+  // Scheme A: Diwali Weekly Chit (₹200/wk for 52 wks = ₹10,400)
+  const groupDiwali = await prisma.chitGroup.upsert({
+    where: { groupCode: 'DW-2026-52W' },
+    update: {},
+    create: {
+      groupCode: 'DW-2026-52W',
+      name: 'Diwali Weekly Chit 2026',
+      chitType: ChitType.FIXED_INSTALLMENT,
+      totalValue: 10400.00,
+      monthlyContribution: 200.00,
+      totalMonths: 52,
+      currentMonth: 4,
+      startDate: new Date('2026-10-01T00:00:00.000Z'),
+      expectedEndDate: new Date(new Date('2026-10-01T00:00:00.000Z').getTime() + 52 * 7 * 86400000),
+      foremanCommissionRate: 5.00,
+      auctionFrequency: 'WEEKLY',
+      status: ChitGroupStatus.ACTIVE,
+      notes: 'Diwali 1-year weekly savings: ₹200/week for 52 weeks (₹10,400 total). Festive disbursement at Deepavali.',
+    },
+  });
+
+  // Generate 52 weekly installments for Diwali group
+  const diwaliStartDate = new Date('2026-10-01T00:00:00.000Z');
+  for (let w = 1; w <= 52; w++) {
+    const dueDate = new Date(diwaliStartDate);
+    dueDate.setDate(dueDate.getDate() + (w - 1) * 7);
+    await prisma.installment.upsert({
+      where: {
+        chitGroupId_monthNumber: {
+          chitGroupId: groupDiwali.id,
+          monthNumber: w,
+        },
+      },
+      update: {},
+      create: {
+        chitGroupId: groupDiwali.id,
+        monthNumber: w,
+        dueDate,
+        baseAmount: 200.00,
+        dividendPerTicket: 0.00,
+        payableAmount: 200.00,
+        notes: `Week ${w} Installment`,
+      },
+    });
+  }
+
+  // Scheme B: ₹1 Lakh Chit (Planned draft pending member capacity and auction confirmation)
+  await prisma.chitGroup.upsert({
+    where: { groupCode: 'LK-100K-20M-PLANNED' },
+    update: {},
+    create: {
+      groupCode: 'LK-100K-20M-PLANNED',
+      name: '₹1 Lakh Monthly Chit (Batch 2026)',
+      chitType: ChitType.AUCTION_BASED,
+      totalValue: 100000.00,
+      monthlyContribution: 5000.00,
+      totalMonths: 20,
+      currentMonth: 1,
+      startDate: new Date('2026-11-01T00:00:00.000Z'),
+      expectedEndDate: new Date('2028-06-01T00:00:00.000Z'),
+      foremanCommissionRate: 5.00,
+      minBidDiscount: 10000.00,
+      maxBidDiscount: 40000.00,
+      auctionFrequency: 'MONTHLY',
+      auctionDayOfMonth: 10,
+      status: ChitGroupStatus.PLANNED,
+      notes: 'Stated ₹1,00,000 prize to winning member. 20 installments of ₹5,000. Member count and payout rules pending confirmation by Durga.',
+    },
+  });
+
+  console.log('✅ Seeded 5 Chit Groups (including Scheme A: Diwali Weekly & Scheme B: ₹1 Lakh Planned)');
 
   // 4. Enroll Memberships in Group 1 (10 members)
   const membershipsG1 = [];

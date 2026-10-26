@@ -1,5 +1,32 @@
 import { apiClient } from './client';
 
+export interface SchemeTemplate {
+  templateId: string;
+  name: string;
+  chitType: 'AUCTION_BASED' | 'FIXED_INSTALLMENT';
+  frequency: 'WEEKLY' | 'MONTHLY';
+  installmentAmount: number;
+  durationPeriods: number;
+  durationLabel: string;
+  expectedMemberContribution: number;
+  totalChitValue: number;
+  defaultCommissionRate: number;
+  requiresMemberConfirmation: boolean;
+  requiresPayoutConfirmation: boolean;
+  notes: string;
+  payoutRuleSummary: string;
+}
+
+export interface ActivateChitGroupPayload {
+  startDate: string;
+  totalMonths: number;
+  foremanCommissionRate?: number;
+  minBidDiscount?: number;
+  maxBidDiscount?: number;
+  payoutRuleNotes?: string;
+  confirmActivation: boolean;
+}
+
 export interface ChitGroup {
   id: string;
   groupCode: string;
@@ -23,6 +50,7 @@ export interface ChitGroup {
   enrolledMembersCount?: number;
   totalSlots?: number;
   vacantSlots?: number;
+  isWeekly?: boolean;
   memberships?: any[];
   installments?: any[];
   auctions?: any[];
@@ -30,6 +58,8 @@ export interface ChitGroup {
 }
 
 export const chitGroupsApi = {
+  getTemplates: () => apiClient<SchemeTemplate[]>('/chit-groups/templates'),
+
   getAll: () => apiClient<ChitGroup[]>('/chit-groups'),
 
   getById: (id: string) => apiClient<ChitGroup>(`/chit-groups/${id}`),
@@ -38,6 +68,23 @@ export const chitGroupsApi = {
     apiClient<ChitGroup>('/chit-groups', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+
+  activate: (id: string, payload: ActivateChitGroupPayload) =>
+    apiClient<ChitGroup>(`/chit-groups/${id}/activate`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  generateSchedule: (id: string) =>
+    apiClient<{
+      groupId: string;
+      totalSlots: number;
+      existingCount: number;
+      newlyCreatedCount: number;
+      frequency: string;
+    }>(`/chit-groups/${id}/generate-schedule`, {
+      method: 'POST',
     }),
 
   enroll: (

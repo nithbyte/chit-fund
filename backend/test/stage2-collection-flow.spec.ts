@@ -138,7 +138,8 @@ describe('Stage 2 Complete Collection & Ledger Flow (e2e)', () => {
   });
 
   it('Step 7: Verify Daily Reconciliation reflects the new collection', async () => {
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const res = await request(app.getHttpServer())
       .get(`/reconciliation/daily?date=${today}`)
       .set('Authorization', `Bearer ${authToken}`);

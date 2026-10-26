@@ -224,6 +224,7 @@ export class CollectionsService {
             const dueDate = new Date(inst.dueDate);
             const isOverdue = dueDate < now;
 
+            const isWeekly = (activeGroup.auctionFrequency || '').toUpperCase() === 'WEEKLY';
             pendingInstallments.push({
               membershipId: mem.id,
               ticketNumber: mem.ticketNumber,
@@ -237,6 +238,9 @@ export class CollectionsService {
               paidAlready,
               dueAmount: due,
               isOverdue,
+              frequency: activeGroup.auctionFrequency || 'MONTHLY',
+              isWeekly,
+              periodLabel: isWeekly ? `Week ${inst.monthNumber}` : `Month ${inst.monthNumber}`,
             });
           }
         }

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { RefreshCw, CheckCircle } from 'lucide-react';
 import { chitGroupsApi } from '../api/chit-groups';
 import { TopHeader } from '../components/layout/TopHeader';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -8,11 +9,27 @@ import { formatINR, formatDate } from '../utils/formatters';
 
 export const ChitGroupSchedulePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
+  const [regenMessage, setRegenMessage] = useState<string | null>(null);
 
   const { data: group, isLoading, error } = useQuery({
     queryKey: ['chitGroup', id],
     queryFn: () => chitGroupsApi.getById(id!),
     enabled: !!id,
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: () => chitGroupsApi.generateSchedule(id!),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['chitGroup', id] });
+      setRegenMessage(
+        `Verified schedule: ${data.existingCount} existing, ${data.newlyCreatedCount} missing slots generated without duplicate records.`,
+      );
+      setTimeout(() => setRegenMessage(null), 5000);
+    },
+    onError: (err: any) => {
+      alert(`Schedule verification error: ${err.message}`);
+    },
   });
 
   if (isLoading) {
@@ -35,28 +52,54 @@ export const ChitGroupSchedulePage: React.FC = () => {
     );
   }
 
+  const isWeekly = group.isWeekly || (group.auctionFrequency || '').toUpperCase() === 'WEEKLY';
+  const periodTypeLabel = isWeekly ? 'Week' : 'Month';
+
   return (
     <div className="min-h-screen bg-slate-50 pb-8">
       <TopHeader
         title={`${group.name} Schedule`}
-        subtitle={`${group.groupCode} • Month 1 to ${group.totalMonths}`}
+        subtitle={`${group.groupCode} • ${periodTypeLabel} 1 to ${group.totalMonths} (${isWeekly ? 'Weekly' : 'Monthly'})`}
         showBack
         backPath={`/chit-groups/${group.id}`}
+        rightAction={
+          <button
+            onClick={() => generateMutation.mutate()}
+            disabled={generateMutation.isPending}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs font-semibold hover:bg-slate-50 transition-colors shadow-xs touch-target disabled:opacity-50"
+            title="Idempotently verify schedule and create any missing installments"
+          >
+            <RefreshCw size={13} className={generateMutation.isPending ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">Verify Schedule</span>
+          </button>
+        }
       />
 
       <div className="max-w-5xl mx-auto px-4 py-4 space-y-4">
+        {regenMessage && (
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+            <CheckCircle size={15} className="shrink-0 text-emerald-600" />
+            <span>{regenMessage}</span>
+          </div>
+        )}
+
         {/* Schedule Summary Banner */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-xs text-slate-500 font-medium">Monthly Installment Matrix</div>
+            <div className="text-xs text-slate-500 font-medium">
+              {isWeekly ? 'Weekly' : 'Monthly'} Installment Schedule Matrix
+            </div>
             <div className="text-sm font-bold text-slate-900 mt-0.5">
-              Base: {formatINR(group.monthlyContribution)} • Current Active: Month {group.currentMonth}
+              Contribution: {formatINR(group.monthlyContribution)} per {periodTypeLabel.toLowerCase()} • Current Active: {periodTypeLabel} {group.currentMonth}
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200">
-              {group.memberships?.length || 0} Members Enrolled
+              {group.memberships?.length || 0}/{group.totalMonths} Members Enrolled
+            </span>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+              {isWeekly ? '7-Day Weekly Intervals' : 'Monthly Calendar Dues'}
             </span>
           </div>
         </div>
@@ -67,9 +110,9 @@ export const ChitGroupSchedulePage: React.FC = () => {
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-100/70 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
                 <tr>
-                  <th className="py-3 px-3.5">Month</th>
+                  <th className="py-3 px-3.5">{periodTypeLabel}</th>
                   <th className="py-3 px-3.5">Due Date</th>
-                  <th className="py-3 px-3.5">Base</th>
+                  <th className="py-3 px-3.5">Base Contribution</th>
                   <th className="py-3 px-3.5">Dividend / Ticket</th>
                   <th className="py-3 px-3.5">Net Payable</th>
                   <th className="py-3 px-3.5">Collection Status</th>
@@ -88,10 +131,12 @@ export const ChitGroupSchedulePage: React.FC = () => {
                     >
                       <td className="py-3 px-3.5 font-mono">
                         <div className="flex items-center gap-1.5">
-                          <span>Month {inst.monthNumber}</span>
+                          <span>
+                            {periodTypeLabel} {inst.monthNumber}
+                          </span>
                           {isCurrent && (
                             <span className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-teal-700 text-white uppercase">
-                              Current
+                              Active
                             </span>
                           )}
                         </div>
@@ -109,7 +154,7 @@ export const ChitGroupSchedulePage: React.FC = () => {
                         {inst.dividendPerTicket > 0 ? (
                           <span>-{formatINR(inst.dividendPerTicket)}</span>
                         ) : (
-                          <span className="text-slate-400 font-normal">₹0 (Foreman)</span>
+                          <span className="text-slate-400 font-normal">₹0 (Standard)</span>
                         )}
                       </td>
 
@@ -141,3 +186,5 @@ export const ChitGroupSchedulePage: React.FC = () => {
     </div>
   );
 };
+
+export default ChitGroupSchedulePage;

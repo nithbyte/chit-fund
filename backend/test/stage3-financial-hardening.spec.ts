@@ -66,7 +66,7 @@ describe('Stage 3 Financial Hardening, Payouts, Expenses & Reports (e2e)', () =>
   it('Ledger Validation: Allocation exceeding installment due balance is rejected (400 Bad Request)', async () => {
     // 1. Get customer and dues
     const custRes = await request(app.getHttpServer())
-      .get('/customers?limit=1')
+      .get('/customers?search=Lakshmi')
       .set('Authorization', `Bearer ${authToken}`);
     customerId = custRes.body.items[0].id;
 

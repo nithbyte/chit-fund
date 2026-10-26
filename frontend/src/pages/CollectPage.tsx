@@ -500,7 +500,7 @@ export const CollectPage: React.FC = () => {
                     onClick={() => setQuickAmount(displayedInstallments[0].dueAmount)}
                     className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold whitespace-nowrap transition-colors touch-target"
                   >
-                    1 Month ({formatINR(displayedInstallments[0].dueAmount)})
+                    {displayedInstallments[0].isWeekly ? '1 Week' : '1 Month'} ({formatINR(displayedInstallments[0].dueAmount)})
                   </button>
                 )}
                 {[1000, 2000, 5000].map((amt) => (
@@ -670,7 +670,7 @@ export const CollectPage: React.FC = () => {
                             />
                             <div className="min-w-0">
                               <div className="text-xs font-bold text-slate-900 truncate">
-                                {inst.groupName} • Month {inst.monthNumber}
+                                {inst.groupName} • {inst.periodLabel || (inst.isWeekly ? `Week ${inst.monthNumber}` : `Month ${inst.monthNumber}`)}
                               </div>
                               <div className="text-[11px] text-slate-500 mt-0.5">
                                 Ticket #{inst.ticketNumber} • Due: {formatDate(inst.dueDate)}
