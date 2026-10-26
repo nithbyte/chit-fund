@@ -48,7 +48,7 @@ export const AppLayout: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-900">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-slate-900 text-white shrink-0 min-h-screen sticky top-0 h-screen border-r border-slate-800">
+      <aside className="hidden md:flex flex-col w-64 bg-slate-900 text-white shrink-0 min-h-screen sticky top-0 h-screen border-r border-slate-800 no-scrollbar">
         {/* Brand header */}
         <div className="p-5 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -66,7 +66,7 @@ export const AppLayout: React.FC = () => {
         </div>
 
         {/* Navigation links */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (

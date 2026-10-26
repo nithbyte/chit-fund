@@ -11,6 +11,8 @@ import {
   HelpCircle,
   Clock,
   ShieldAlert,
+  Zap,
+  Calendar,
 } from 'lucide-react';
 import { chitGroupsApi, type SchemeTemplate, type CommissionType } from '../api/chit-groups';
 import { TopHeader } from '../components/layout/TopHeader';
@@ -89,6 +91,64 @@ export const ChitGroupsPage: React.FC = () => {
     },
   });
 
+  const openCreateModal = (freq: 'WEEKLY' | 'MONTHLY' = 'WEEKLY') => {
+    setSelectedTemplateId(null);
+    setFormError(null);
+    const yearSuffix = new Date().getFullYear();
+    const isWeekly = freq === 'WEEKLY';
+
+    setFormData({
+      groupCode: isWeekly ? `WK-${yearSuffix}-52W` : `MN-${yearSuffix}-20M`,
+      name: isWeekly ? `Weekly Chit Scheme ${yearSuffix}` : `₹1 Lakh Monthly Chit`,
+      chitType: isWeekly ? 'FIXED_INSTALLMENT' : 'AUCTION_BASED',
+      totalValue: isWeekly ? 10400 : 100000,
+      monthlyContribution: isWeekly ? 200 : 5000,
+      totalMonths: isWeekly ? 52 : 20,
+      startDate: new Date().toISOString().split('T')[0],
+      foremanCommissionRate: isWeekly ? 0 : 5.0,
+      commissionType: isWeekly ? 'FIXED_AMOUNT_PER_INSTALLMENT' : 'PERCENTAGE_OF_CHIT_VALUE',
+      commissionRate: isWeekly ? 0 : 5.0,
+      commissionAmount: 0,
+      commissionCalculationBase: isWeekly ? 'INSTALLMENT_AMOUNT' : 'CHIT_VALUE',
+      commissionNotes: '',
+      isCommissionConfirmed: isWeekly,
+      minBidDiscount: isWeekly ? 0 : 10000,
+      maxBidDiscount: isWeekly ? 0 : 40000,
+      auctionFrequency: freq,
+      status: 'ACTIVE',
+      notes: isWeekly ? 'Weekly collections scheduled every 7 days.' : '',
+    });
+
+    setIsModalOpen(true);
+  };
+
+  const handleFrequencySwitch = (freq: 'WEEKLY' | 'MONTHLY') => {
+    if (formData.auctionFrequency === freq) return;
+    const yearSuffix = new Date().getFullYear();
+    const isWeekly = freq === 'WEEKLY';
+    setFormData((prev) => ({
+      ...prev,
+      auctionFrequency: freq,
+      groupCode: isWeekly
+        ? prev.groupCode.startsWith('MN-') ? `WK-${yearSuffix}-52W` : prev.groupCode
+        : prev.groupCode.startsWith('WK-') ? `MN-${yearSuffix}-20M` : prev.groupCode,
+      name: isWeekly
+        ? prev.name.includes('Monthly') ? `Weekly Chit Scheme ${yearSuffix}` : prev.name
+        : prev.name.includes('Weekly') ? `Monthly Auction Chit ${yearSuffix}` : prev.name,
+      chitType: isWeekly ? 'FIXED_INSTALLMENT' : prev.chitType,
+      monthlyContribution: isWeekly
+        ? (prev.monthlyContribution === 5000 ? 200 : prev.monthlyContribution)
+        : (prev.monthlyContribution === 200 ? 5000 : prev.monthlyContribution),
+      totalMonths: isWeekly
+        ? (prev.totalMonths === 20 ? 52 : prev.totalMonths)
+        : (prev.totalMonths === 52 ? 20 : prev.totalMonths),
+      totalValue: isWeekly
+        ? (prev.totalValue === 100000 ? 10400 : prev.totalValue)
+        : (prev.totalValue === 10400 ? 100000 : prev.totalValue),
+      commissionType: isWeekly ? 'FIXED_AMOUNT_PER_INSTALLMENT' : 'PERCENTAGE_OF_CHIT_VALUE',
+    }));
+  };
+
   const handleApplyTemplate = (tmpl: SchemeTemplate) => {
     setSelectedTemplateId(tmpl.templateId);
     setFormError(null);
@@ -136,16 +196,22 @@ export const ChitGroupsPage: React.FC = () => {
         title="Chit Schemes"
         subtitle="Weekly & Monthly Savings Batches"
         rightAction={
-          <button
-            onClick={() => {
-              setSelectedTemplateId(null);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 transition-colors shadow-xs touch-target"
-          >
-            <Plus size={16} />
-            <span>Create Custom Group</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => openCreateModal('WEEKLY')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-700 text-white text-xs font-semibold hover:bg-purple-800 transition-colors shadow-xs touch-target"
+            >
+              <Zap size={14} />
+              <span>+ Weekly Chit</span>
+            </button>
+            <button
+              onClick={() => openCreateModal('MONTHLY')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 transition-colors shadow-xs touch-target"
+            >
+              <Plus size={14} />
+              <span>+ Monthly Chit</span>
+            </button>
+          </div>
         }
       />
 
@@ -390,37 +456,78 @@ export const ChitGroupsPage: React.FC = () => {
               </button>
             </div>
 
+            {/* Top Segmented Frequency Selector */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl mt-3">
+              <button
+                type="button"
+                onClick={() => handleFrequencySwitch('WEEKLY')}
+                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                  formData.auctionFrequency === 'WEEKLY'
+                    ? 'bg-purple-700 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Zap size={15} />
+                <span>Weekly Chit Scheme</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFrequencySwitch('MONTHLY')}
+                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                  formData.auctionFrequency === 'MONTHLY'
+                    ? 'bg-teal-700 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Calendar size={15} />
+                <span>Monthly Chit Scheme</span>
+              </button>
+            </div>
+
+            {/* Frequency Explanatory Banner */}
+            {formData.auctionFrequency === 'WEEKLY' ? (
+              <div className="mt-2.5 p-3 rounded-xl bg-purple-50 border border-purple-200 text-xs text-purple-900 space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-purple-950">
+                  <Zap size={14} className="text-purple-700 shrink-0" />
+                  <span>Weekly Collection Schedule</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-purple-800">
+                  Installment dues are recorded on a 7-day cycle. Perfect for festive batches like Diwali chits or weekly merchant savings.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-2.5 p-3 rounded-xl bg-teal-50 border border-teal-200 text-xs text-teal-900 space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-teal-950">
+                  <Calendar size={14} className="text-teal-700 shrink-0" />
+                  <span>Monthly Collection Schedule</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-teal-800">
+                  Installments and auctions are scheduled monthly per standard chit fund agreements.
+                </p>
+              </div>
+            )}
+
             {/* Scheme B Financial Distinction Callout */}
             {selectedTemplateId === 'TEMPLATE_1_LAKH_MONTHLY' && (
-              <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
+              <div className="mt-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
                 <div className="font-bold flex items-center gap-1.5 text-amber-950">
                   <ShieldAlert size={15} className="shrink-0 text-amber-700" />
                   <span>Important Financial Rule</span>
                 </div>
                 <p className="text-[11px] leading-relaxed text-amber-800">
-                  The ₹1,00,000 chit value represents the stated amount paid to the winning member. It is not automatically the monthly collection total or guaranteed net payout. Member count, auction deductions, and net payouts must be confirmed.
-                </p>
-              </div>
-            )}
-
-            {/* Scheme A Weekly Callout */}
-            {selectedTemplateId === 'TEMPLATE_DIWALI_WEEKLY' && (
-              <div className="mt-3 p-3 rounded-xl bg-teal-50 border border-teal-200 text-xs text-teal-900 space-y-1">
-                <div className="font-bold text-teal-950">Weekly Schedule Formula</div>
-                <p className="text-[11px] leading-relaxed text-teal-800">
-                  Contribution is ₹200 per week for 52 weekly installments (1 year). Total contribution per member over 52 weeks is exactly ₹10,400.
+                  The ₹1,00,000 chit value represents the stated amount paid to the winning member. It is not automatically the monthly collection total or guaranteed net payout.
                 </p>
               </div>
             )}
 
             {formError && (
-              <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800 flex items-center gap-2">
+              <div className="mt-2.5 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800 flex items-center gap-2">
                 <AlertCircle size={15} className="shrink-0" />
                 <span>{formError}</span>
               </div>
             )}
 
-            <form onSubmit={handleCreateSubmit} className="space-y-3 mt-4 text-xs">
+            <form onSubmit={handleCreateSubmit} className="space-y-3 mt-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -431,28 +538,28 @@ export const ChitGroupsPage: React.FC = () => {
                     required
                     value={formData.groupCode}
                     onChange={(e) => setFormData({ ...formData, groupCode: e.target.value })}
-                    placeholder="e.g. DW-2026-52W"
+                    placeholder={formData.auctionFrequency === 'WEEKLY' ? 'e.g. WK-2026-52W' : 'e.g. LK-100K-20M'}
                     className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none font-mono"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Frequency *
+                    Collection Cadence
                   </label>
-                  <select
-                    value={formData.auctionFrequency}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        auctionFrequency: e.target.value as 'MONTHLY' | 'WEEKLY',
-                      })
-                    }
-                    className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none font-semibold text-slate-800"
-                  >
-                    <option value="WEEKLY">Weekly (7-day intervals)</option>
-                    <option value="MONTHLY">Monthly (Calendar months)</option>
-                  </select>
+                  <div className="px-3 py-2 text-xs border rounded-lg bg-slate-100 font-bold text-slate-800 flex items-center gap-1.5">
+                    {formData.auctionFrequency === 'WEEKLY' ? (
+                      <>
+                        <Zap size={14} className="text-purple-600" />
+                        <span>Weekly (Every 7 Days)</span>
+                      </>
+                    ) : (
+                      <>
+                        <Calendar size={14} className="text-teal-600" />
+                        <span>Monthly (Calendar Months)</span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -465,8 +572,12 @@ export const ChitGroupsPage: React.FC = () => {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Diwali Weekly Chit 2026"
-                  className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                  placeholder={
+                    formData.auctionFrequency === 'WEEKLY'
+                      ? 'e.g. Diwali Weekly Chit 2026'
+                      : 'e.g. ₹1 Lakh 20-Month Auction Chit'
+                  }
+                  className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none font-semibold text-slate-900"
                 />
               </div>
 
@@ -482,15 +593,17 @@ export const ChitGroupsPage: React.FC = () => {
                     }
                     className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none"
                   >
-                    <option value="AUCTION_BASED">Auction Based Chit</option>
                     <option value="FIXED_INSTALLMENT">Fixed Savings Scheme</option>
+                    <option value="AUCTION_BASED">Auction Based Chit</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    {formData.auctionFrequency === 'WEEKLY' ? 'Weekly Due (₹) *' : 'Monthly Due (₹) *'}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      {formData.auctionFrequency === 'WEEKLY' ? 'Weekly Due (₹) *' : 'Monthly Due (₹) *'}
+                    </label>
+                  </div>
                   <input
                     type="number"
                     required
@@ -501,6 +614,25 @@ export const ChitGroupsPage: React.FC = () => {
                     }
                     className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none font-bold tabular-nums"
                   />
+                  {/* Quick amount chips */}
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    {(formData.auctionFrequency === 'WEEKLY' ? [100, 200, 500, 1000] : [1000, 2000, 5000, 10000]).map(
+                      (amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, monthlyContribution: amt })}
+                          className={`text-[10px] px-1.5 py-0.5 rounded font-mono border transition-colors ${
+                            formData.monthlyContribution === amt
+                              ? 'bg-teal-700 text-white border-teal-700'
+                              : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                          }`}
+                        >
+                          ₹{amt}
+                        </button>
+                      ),
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -517,15 +649,57 @@ export const ChitGroupsPage: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, totalMonths: Number(e.target.value) })}
                     className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none font-bold tabular-nums"
                   />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Total installments: {formData.totalMonths}
-                  </span>
+                  {/* Quick duration chips */}
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    {(formData.auctionFrequency === 'WEEKLY'
+                      ? [
+                          { label: '26 Wks', val: 26 },
+                          { label: '50 Wks', val: 50 },
+                          { label: '52 Wks (1 Yr)', val: 52 },
+                        ]
+                      : [
+                          { label: '12 Mo', val: 12 },
+                          { label: '20 Mo', val: 20 },
+                          { label: '25 Mo', val: 25 },
+                        ]
+                    ).map((dur) => (
+                      <button
+                        key={dur.val}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, totalMonths: dur.val })}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                          formData.totalMonths === dur.val
+                            ? 'bg-teal-700 text-white border-teal-700'
+                            : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                        }`}
+                      >
+                        {dur.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Stated Chit Value (₹) *
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Stated Chit Value (₹) *
+                    </label>
+                    {formData.monthlyContribution > 0 && formData.totalMonths > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            totalValue: formData.monthlyContribution * formData.totalMonths,
+                          })
+                        }
+                        className="text-[10px] font-semibold text-teal-700 hover:underline"
+                        title="Click to calculate (Due × Capacity)"
+                      >
+                        Auto-Set: ₹{(formData.monthlyContribution * formData.totalMonths).toLocaleString('en-IN')}
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="number"
                     required
@@ -534,8 +708,8 @@ export const ChitGroupsPage: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, totalValue: Number(e.target.value) })}
                     className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none font-bold tabular-nums text-teal-900"
                   />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Stated payout prize amount
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">
+                    Expected: {formData.totalMonths} {formData.auctionFrequency === 'WEEKLY' ? 'weeks' : 'months'} × ₹{formData.monthlyContribution} = ₹{(formData.monthlyContribution * formData.totalMonths).toLocaleString('en-IN')}
                   </span>
                 </div>
               </div>
