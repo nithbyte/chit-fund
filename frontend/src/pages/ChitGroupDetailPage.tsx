@@ -274,7 +274,7 @@ export const ChitGroupDetailPage: React.FC = () => {
                   className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none"
                 >
                   <option value="">-- Choose Customer from Directory --</option>
-                  {customers?.map((c) => (
+                  {customers?.items?.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.fullName} ({c.customerCode} • {c.phone})
                     </option>

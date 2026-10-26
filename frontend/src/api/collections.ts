@@ -12,6 +12,21 @@ export interface PendingInstallment {
   payableAmount: number;
   paidAlready: number;
   dueAmount: number;
+  isOverdue?: boolean;
+}
+
+export interface CustomerMembershipSummary {
+  id: string;
+  ticketNumber: number;
+  chitGroup: {
+    id: string;
+    groupCode: string;
+    name: string;
+    status: string;
+    totalValue: number;
+    monthlyContribution: number;
+    currentMonth: number;
+  };
 }
 
 export interface CustomerDuesResponse {
@@ -21,8 +36,41 @@ export interface CustomerDuesResponse {
     phone: string;
     customerCode: string;
   };
+  memberships: CustomerMembershipSummary[];
+  recentPayment: {
+    id: string;
+    receiptNumber: string;
+    amount: number;
+    paymentDate: string;
+    paymentMode: 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE';
+    transactionRef?: string;
+  } | null;
   pendingInstallments: PendingInstallment[];
   totalDueAmount: number;
+}
+
+export interface PaymentAllocationItem {
+  id: string;
+  paymentId: string;
+  membershipId: string;
+  installmentId: string;
+  allocatedAmount: number;
+  notes?: string;
+  installment?: {
+    id: string;
+    monthNumber: number;
+    dueDate: string;
+    payableAmount: number;
+    chitGroup?: {
+      id: string;
+      groupCode: string;
+      name: string;
+    };
+  };
+  membership?: {
+    id: string;
+    ticketNumber: number;
+  };
 }
 
 export interface PaymentReceipt {
@@ -39,9 +87,31 @@ export interface PaymentReceipt {
   reversalReason?: string;
   reversedAt?: string;
   createdAt: string;
-  customer?: any;
-  receivedBy?: any;
-  allocations?: any[];
+  customer?: {
+    id: string;
+    customerCode: string;
+    fullName: string;
+    phone: string;
+    address?: string;
+  };
+  receivedBy?: {
+    id: string;
+    fullName: string;
+    username: string;
+  };
+  allocations?: PaymentAllocationItem[];
+}
+
+export interface CollectionsRegisterResponse {
+  payments: PaymentReceipt[];
+  totals: {
+    count: number;
+    cashTotal: number;
+    upiTotal: number;
+    bankTotal: number;
+    chequeTotal: number;
+    grandTotal: number;
+  };
 }
 
 export interface RecordCollectionPayload {
@@ -51,6 +121,7 @@ export interface RecordCollectionPayload {
   paymentDate?: string;
   transactionRef?: string;
   notes?: string;
+  idempotencyKey?: string;
   allocations: {
     installmentId: string;
     membershipId: string;
@@ -60,19 +131,31 @@ export interface RecordCollectionPayload {
 }
 
 export const collectionsApi = {
-  getAll: (filters?: { customerId?: string; startDate?: string; endDate?: string }) => {
+  getAll: (filters?: {
+    customerId?: string;
+    startDate?: string;
+    endDate?: string;
+    paymentMode?: string;
+    receiptNumber?: string;
+    search?: string;
+  }) => {
     const params = new URLSearchParams();
     if (filters?.customerId) params.append('customerId', filters.customerId);
     if (filters?.startDate) params.append('startDate', filters.startDate);
     if (filters?.endDate) params.append('endDate', filters.endDate);
+    if (filters?.paymentMode) params.append('paymentMode', filters.paymentMode);
+    if (filters?.receiptNumber) params.append('receiptNumber', filters.receiptNumber);
+    if (filters?.search) params.append('search', filters.search);
     const qs = params.toString() ? `?${params.toString()}` : '';
-    return apiClient<PaymentReceipt[]>(`/collections${qs}`);
+    return apiClient<CollectionsRegisterResponse>(`/collections${qs}`);
   },
 
   getById: (id: string) => apiClient<PaymentReceipt>(`/collections/${id}`),
 
-  getCustomerDues: (customerId: string) =>
-    apiClient<CustomerDuesResponse>(`/collections/customer/${customerId}/dues`),
+  getCustomerDues: (customerId: string, membershipId?: string) => {
+    const qs = membershipId ? `?membershipId=${encodeURIComponent(membershipId)}` : '';
+    return apiClient<CustomerDuesResponse>(`/collections/customer/${customerId}/dues${qs}`);
+  },
 
   record: (payload: RecordCollectionPayload) =>
     apiClient<PaymentReceipt>('/collections', {

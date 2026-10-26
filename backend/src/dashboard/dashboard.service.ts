@@ -1,35 +1,74 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 
+export interface DashboardQueryDto {
+  startDate?: string;
+  endDate?: string;
+}
+
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSummaryStats() {
+  async getSummaryStats(query?: DashboardQueryDto) {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Default to today start and end in IST (midnight)
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    // 1. Total collections today and this month
-    const paymentsThisMonth = await this.prisma.payment.aggregate({
-      where: {
-        isReversed: false,
-        paymentDate: { gte: startOfMonth },
-      },
-      _sum: { amount: true },
-      _count: { id: true },
-    });
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
 
+    // Selected Date Range (defaults to current month if not provided)
+    const filterStart = query?.startDate ? new Date(query.startDate) : startOfMonth;
+    const filterEnd = query?.endDate ? new Date(query.endDate) : todayEnd;
+
+    // 1. Collections Today
     const paymentsToday = await this.prisma.payment.aggregate({
       where: {
         isReversed: false,
-        paymentDate: { gte: startOfToday },
+        paymentDate: { gte: todayStart, lte: todayEnd },
       },
       _sum: { amount: true },
       _count: { id: true },
     });
 
-    // 2. Active customers & active groups count
+    // 2. Collections for Selected Date Range
+    const paymentsSelectedRange = await this.prisma.payment.aggregate({
+      where: {
+        isReversed: false,
+        paymentDate: { gte: filterStart, lte: filterEnd },
+      },
+      _sum: { amount: true },
+      _count: { id: true },
+    });
+
+    // 3. Payment Mode Breakdown for Selected Range (Cash, UPI, Bank Transfer)
+    const paymentsByMode = await this.prisma.payment.groupBy({
+      by: ['paymentMode'],
+      where: {
+        isReversed: false,
+        paymentDate: { gte: filterStart, lte: filterEnd },
+      },
+      _sum: { amount: true },
+      _count: { id: true },
+    });
+
+    const modeTotals = {
+      cash: 0,
+      upi: 0,
+      bankTransfer: 0,
+      cheque: 0,
+    };
+
+    paymentsByMode.forEach((item) => {
+      const amt = Number(item._sum.amount ?? 0);
+      if (item.paymentMode === 'CASH') modeTotals.cash += amt;
+      else if (item.paymentMode === 'UPI') modeTotals.upi += amt;
+      else if (item.paymentMode === 'BANK_TRANSFER') modeTotals.bankTransfer += amt;
+      else if (item.paymentMode === 'CHEQUE') modeTotals.cheque += amt;
+    });
+
+    // 4. Active customers & active groups count
     const activeCustomersCount = await this.prisma.customer.count({
       where: { isActive: true },
     });
@@ -38,19 +77,20 @@ export class DashboardService {
       where: { status: 'ACTIVE' },
     });
 
-    // 3. Foreman commission earned from auctions to date
+    // 5. Foreman commission earned from auctions to date
     const auctionsTotal = await this.prisma.auction.aggregate({
       where: { status: 'COMPLETED' },
       _sum: { foremanCommission: true },
       _count: { id: true },
     });
 
-    // 4. Calculate total outstanding dues across all active groups
+    // 6. Scan installments for: Due Today, Overdue, and Total Outstanding Dues
     const activeGroups = await this.prisma.chitGroup.findMany({
       where: { status: 'ACTIVE' },
       include: {
         memberships: {
           where: { status: 'ACTIVE' },
+          include: { customer: true },
         },
         installments: {
           include: {
@@ -63,27 +103,68 @@ export class DashboardService {
     });
 
     let totalPendingDues = 0;
+    let dueTodayCount = 0;
+    let dueTodayAmount = 0;
+    let overdueCount = 0;
+    let overdueAmount = 0;
+
+    const overdueList: any[] = [];
+    const dueTodayList: any[] = [];
+
     for (const group of activeGroups) {
-      const activeMembersCount = group.memberships.length;
       for (const inst of group.installments) {
         if (inst.monthNumber <= group.currentMonth) {
-          const expectedTotalForInst = Number(inst.payableAmount) * activeMembersCount;
-          const collectedForInst = inst.paymentAllocations.reduce(
-            (sum, a) => sum + Number(a.allocatedAmount),
-            0,
-          );
-          if (collectedForInst < expectedTotalForInst) {
-            totalPendingDues += expectedTotalForInst - collectedForInst;
+          const instDueDate = new Date(inst.dueDate);
+          const isDueToday =
+            instDueDate.getFullYear() === now.getFullYear() &&
+            instDueDate.getMonth() === now.getMonth() &&
+            instDueDate.getDate() === now.getDate();
+          const isOverdue = instDueDate < todayStart;
+
+          for (const mem of group.memberships) {
+            const payable = Number(inst.payableAmount);
+            const paidForMem = inst.paymentAllocations
+              .filter((a) => a.membershipId === mem.id)
+              .reduce((sum, a) => sum + Number(a.allocatedAmount), 0);
+
+            const remaining = payable - paidForMem;
+            if (remaining > 0.01) {
+              totalPendingDues += remaining;
+
+              const dueItem = {
+                customerId: mem.customer.id,
+                customerName: mem.customer.fullName,
+                customerPhone: mem.customer.phone,
+                customerCode: mem.customer.customerCode,
+                chitGroupId: group.id,
+                groupCode: group.groupCode,
+                groupName: group.name,
+                ticketNumber: mem.ticketNumber,
+                monthNumber: inst.monthNumber,
+                dueDate: inst.dueDate,
+                remainingDue: remaining,
+              };
+
+              if (isDueToday) {
+                dueTodayCount++;
+                dueTodayAmount += remaining;
+                if (dueTodayList.length < 5) dueTodayList.push(dueItem);
+              } else if (isOverdue) {
+                overdueCount++;
+                overdueAmount += remaining;
+                if (overdueList.length < 5) overdueList.push(dueItem);
+              }
+            }
           }
         }
       }
     }
 
-    // 5. Recent collections (latest 6 manual records)
+    // 7. Recent Transactions (latest 10 manual collections)
     const recentCollections = await this.prisma.payment.findMany({
       where: { isReversed: false },
       orderBy: { paymentDate: 'desc' },
-      take: 6,
+      take: 10,
       include: {
         customer: {
           select: {
@@ -96,7 +177,7 @@ export class DashboardService {
       },
     });
 
-    // 6. Upcoming auctions or next group dates
+    // 8. Active Batches
     const upcomingGroups = await this.prisma.chitGroup.findMany({
       where: { status: 'ACTIVE' },
       select: {
@@ -113,11 +194,24 @@ export class DashboardService {
 
     return {
       financials: {
-        collectionsThisMonth: Number(paymentsThisMonth._sum.amount ?? 0),
-        collectionsCountThisMonth: paymentsThisMonth._count.id,
         collectionsToday: Number(paymentsToday._sum.amount ?? 0),
         collectionsCountToday: paymentsToday._count.id,
+        collectionsSelectedRange: Number(paymentsSelectedRange._sum.amount ?? 0),
+        collectionsCountSelectedRange: paymentsSelectedRange._count.id,
+        rangeStartDate: filterStart.toISOString(),
+        rangeEndDate: filterEnd.toISOString(),
+        modeTotals,
         totalPendingDues,
+        dueToday: {
+          count: dueTodayCount,
+          amount: dueTodayAmount,
+          items: dueTodayList,
+        },
+        overdue: {
+          count: overdueCount,
+          amount: overdueAmount,
+          items: overdueList,
+        },
         foremanCommissionEarned: Number(auctionsTotal._sum.foremanCommission ?? 0),
         auctionsConducted: auctionsTotal._count.id,
       },

@@ -23,15 +23,50 @@ export interface Customer {
   };
 }
 
+export interface CustomerListResponse {
+  items: Customer[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface DuplicateMatchItem {
+  id: string;
+  customerCode: string;
+  fullName: string;
+  phone: string;
+  address?: string;
+  isActive: boolean;
+}
+
+export interface DuplicateCheckResponse {
+  hasMatches: boolean;
+  matchingPhone: DuplicateMatchItem[];
+  matchingName: DuplicateMatchItem[];
+}
+
 export const customersApi = {
-  getAll: (search?: string) => {
-    const query = search ? `?search=${encodeURIComponent(search)}` : '';
-    return apiClient<Customer[]>(`/customers${query}`);
+  getAll: (filters?: { search?: string; page?: number; limit?: number; status?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.page) params.append('page', String(filters.page));
+    if (filters?.limit) params.append('limit', String(filters.limit));
+    if (filters?.status) params.append('status', filters.status);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return apiClient<CustomerListResponse>(`/customers${qs}`);
+  },
+
+  checkDuplicate: (phone: string, name?: string) => {
+    const params = new URLSearchParams();
+    params.append('phone', phone);
+    if (name) params.append('name', name);
+    return apiClient<DuplicateCheckResponse>(`/customers/check-duplicate?${params.toString()}`);
   },
 
   getById: (id: string) => apiClient<Customer>(`/customers/${id}`),
 
-  create: (data: Partial<Customer>) =>
+  create: (data: Partial<Customer> & { confirmDuplicate?: boolean }) =>
     apiClient<Customer>('/customers', {
       method: 'POST',
       body: JSON.stringify(data),

@@ -68,10 +68,12 @@ model User {
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
-  paymentsReceived Payment[]  @relation("ReceivedPayments")
-  payoutsDisbursed Payout[]   @relation("DisbursedPayouts")
-  expensesRecorded Expense[]  @relation("RecordedExpenses")
-  auditLogs        AuditLog[] @relation("PerformedAuditLogs")
+  paymentsReceived Payment[]             @relation("ReceivedPayments")
+  payoutsDisbursed Payout[]              @relation("DisbursedPayouts")
+  expensesRecorded Expense[]             @relation("RecordedExpenses")
+  auditLogs        AuditLog[]            @relation("PerformedAuditLogs")
+  reconciliations  DailyReconciliation[] @relation("ReconciledBy")
+  importBatches    ImportBatch[]         @relation("ImportedBatches")
 
   @@map("users")
 }
@@ -182,6 +184,7 @@ model Installment {
 model Payment {
   id             String        @id @default(uuid()) @db.Uuid
   receiptNumber  String        @unique @map("receipt_number")
+  idempotencyKey String?       @unique @map("idempotency_key")
   customerId     String        @map("customer_id") @db.Uuid
   amount         Decimal       @db.Decimal(12, 2)
   paymentDate    DateTime      @map("payment_date")
@@ -317,4 +320,53 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([timestamp])
   @@map("audit_logs")
+}
+
+model DailyReconciliation {
+  id                 String    @id @default(uuid()) @db.Uuid
+  reconciliationDate DateTime  @unique @map("reconciliation_date")
+  systemCashTotal    Decimal   @map("system_cash_total") @db.Decimal(12, 2)
+  systemUpiTotal     Decimal   @map("system_upi_total") @db.Decimal(12, 2)
+  systemBankTotal    Decimal   @map("system_bank_total") @db.Decimal(12, 2)
+  systemTotal        Decimal   @map("system_total") @db.Decimal(12, 2)
+  actualCashCounted  Decimal?  @map("actual_cash_counted") @db.Decimal(12, 2)
+  actualUpiVerified  Decimal?  @map("actual_upi_verified") @db.Decimal(12, 2)
+  actualBankVerified Decimal?  @map("actual_bank_verified") @db.Decimal(12, 2)
+  discrepancyNote    String?   @map("discrepancy_note")
+  status             String    @default("DRAFT") // DRAFT, RECONCILED, DISCREPANCY
+  reconciledById     String?   @map("reconciled_by_id") @db.Uuid
+  reconciledAt       DateTime? @map("reconciled_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  reconciledBy       User?     @relation("ReconciledBy", fields: [reconciledById], references: [id], onDelete: SetNull)
+
+  @@map("daily_reconciliations")
+}
+
+model ImportBatch {
+  id           String   @id @default(uuid()) @db.Uuid
+  batchType    String   @map("batch_type") // CUSTOMERS, COLLECTIONS, GROUPS
+  filename     String
+  fileContent  String   @map("file_content") @db.Text
+  totalRows    Int      @map("total_rows")
+  successRows  Int      @map("success_rows")
+  failedRows   Int      @map("failed_rows")
+  status       String   // COMPLETED, PARTIAL, FAILED
+  summary      Json?
+  importedById String   @map("imported_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  importedBy   User     @relation("ImportedBatches", fields: [importedById], references: [id], onDelete: Restrict)
+
+  @@map("import_batches")
+}
+
+model Setting {
+  key         String   @id
+  value       String   @db.Text
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
 }

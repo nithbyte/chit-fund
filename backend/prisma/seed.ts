@@ -403,7 +403,24 @@ async function main() {
     },
   });
 
-  console.log('✅ Seeded Payments, Multi-Installment & Partial Allocations, and Audit Log');
+  // 8. Default System Settings
+  const defaultSettings = [
+    { key: 'company_name', value: 'Durga Chit Fund', description: 'Business display title on receipts and dashboard' },
+    { key: 'company_address', value: 'Plot 12, Main Bazar, Guntur, AP - 522001', description: 'Office and collection counter address' },
+    { key: 'company_phone', value: '+91 98480 11223', description: 'Proprietor phone for customer inquiries' },
+    { key: 'company_proprietor', value: 'Durga Devi', description: 'Authorized foreman and owner signature' },
+    { key: 'business_timezone', value: 'Asia/Kolkata', description: 'Official transaction timezone' },
+  ];
+
+  for (const s of defaultSettings) {
+    await prisma.setting.upsert({
+      where: { key: s.key },
+      update: { value: s.value, description: s.description },
+      create: { key: s.key, value: s.value, description: s.description },
+    });
+  }
+
+  console.log('✅ Seeded Payments, Multi-Installment & Partial Allocations, Audit Log, and Settings');
   console.log('🎉 Database seeding completed successfully.');
 }
 

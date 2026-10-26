@@ -13,9 +13,15 @@ import { ChitGroupDetailPage } from './pages/ChitGroupDetailPage';
 import { ChitGroupSchedulePage } from './pages/ChitGroupSchedulePage';
 import { CollectPage } from './pages/CollectPage';
 import { ReceiptPage } from './pages/ReceiptPage';
+import { PaymentRegisterPage } from './pages/PaymentRegisterPage';
+import { ReconciliationPage } from './pages/ReconciliationPage';
+import { ImportPage } from './pages/ImportPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { AuctionsPage } from './pages/AuctionsPage';
 import { PayoutsPage } from './pages/PayoutsPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { ExpensesPage } from './pages/ExpensesPage';
+import { AuditLogsPage } from './pages/AuditLogsPage';
 import { MorePage } from './pages/MorePage';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
 
@@ -76,10 +82,15 @@ export function App() {
               <Route path="chit-groups/:id/schedule" element={<ChitGroupSchedulePage />} />
               <Route path="collect" element={<CollectPage />} />
               <Route path="receipts/:id" element={<ReceiptPage />} />
+              <Route path="register" element={<PaymentRegisterPage />} />
+              <Route path="reconciliation" element={<ReconciliationPage />} />
+              <Route path="import" element={<ImportPage />} />
+              <Route path="settings" element={<SettingsPage />} />
               <Route path="auctions" element={<AuctionsPage />} />
               <Route path="payouts" element={<PayoutsPage />} />
+              <Route path="expenses" element={<ExpensesPage />} />
               <Route path="reports" element={<ReportsPage />} />
-              <Route path="settings" element={<MorePage />} />
+              <Route path="audit-logs" element={<AuditLogsPage />} />
               <Route path="more" element={<MorePage />} />
             </Route>
 

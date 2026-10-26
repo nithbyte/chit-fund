@@ -55,6 +55,11 @@ export class RecordCollectionDto {
   @IsString()
   notes?: string;
 
+  @ApiPropertyOptional({ example: 'c4e511c2-9018-45ec-ba81-22442bf50771', description: 'Unique idempotency key to prevent duplicate submissions' })
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
+
   @ApiProperty({
     type: [AllocationItemDto],
     description: 'Breakdown of which installments this payment covers (supports partial and multi-month)',

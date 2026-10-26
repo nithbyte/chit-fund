@@ -41,4 +41,8 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({ example: false, description: 'Explicitly confirm creation even if warning matches existing phone' })
+  @IsOptional()
+  confirmDuplicate?: boolean;
 }

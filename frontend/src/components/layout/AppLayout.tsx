@@ -11,6 +11,11 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
+  DollarSign,
+  BarChart3,
+  Shield,
+  FileSpreadsheet,
+  Upload,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { BottomNav } from './BottomNav';
@@ -28,10 +33,15 @@ export const AppLayout: React.FC = () => {
     { name: 'Dashboard', path: '/dashboard', icon: Home },
     { name: 'Customers', path: '/customers', icon: Users },
     { name: 'Collect Money', path: '/collect', icon: IndianRupee, badge: 'Daily' },
+    { name: 'Collections Register', path: '/register', icon: FileText },
+    { name: 'Reconciliation', path: '/reconciliation', icon: FileSpreadsheet },
+    { name: 'Operating Expenses', path: '/expenses', icon: DollarSign },
     { name: 'Chit Groups', path: '/chit-groups', icon: Layers },
     { name: 'Auctions', path: '/auctions', icon: Gavel },
-    { name: 'Payouts', path: '/payouts', icon: BadgePercent },
-    { name: 'Reports', path: '/reports', icon: FileText },
+    { name: 'Prize Payouts', path: '/payouts', icon: BadgePercent },
+    { name: 'Reports & Ledgers', path: '/reports', icon: BarChart3 },
+    { name: 'Data Migration', path: '/import', icon: Upload },
+    { name: 'Audit Logs', path: '/audit-logs', icon: Shield },
     { name: 'Settings', path: '/settings', icon: Settings },
   ];
 

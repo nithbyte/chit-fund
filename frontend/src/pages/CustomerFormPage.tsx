@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Save, AlertCircle, Loader2 } from 'lucide-react';
+import { Save, AlertCircle, Loader2, AlertTriangle, ExternalLink, X, Check } from 'lucide-react';
 import { customersApi } from '../api/customers';
+import type { DuplicateMatchItem } from '../api/customers';
 import { TopHeader } from '../components/layout/TopHeader';
 
 const customerSchema = z.object({
@@ -27,7 +28,10 @@ export const CustomerFormPage: React.FC = () => {
   const isEditing = !!id;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
   const [serverError, setServerError] = useState<string | null>(null);
+  const [duplicateMatches, setDuplicateMatches] = useState<DuplicateMatchItem[] | null>(null);
+  const [pendingFormData, setPendingFormData] = useState<CustomerFormData | null>(null);
 
   const { data: existingCustomer } = useQuery({
     queryKey: ['customer', id],
@@ -39,7 +43,7 @@ export const CustomerFormPage: React.FC = () => {
     register,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
@@ -68,15 +72,23 @@ export const CustomerFormPage: React.FC = () => {
   }, [existingCustomer, reset]);
 
   const mutation = useMutation({
-    mutationFn: async (data: CustomerFormData) => {
+    mutationFn: async ({
+      data,
+      confirmDuplicate = false,
+    }: {
+      data: CustomerFormData;
+      confirmDuplicate?: boolean;
+    }) => {
       if (isEditing) {
         return customersApi.update(id!, data);
       }
-      return customersApi.create(data);
+      return customersApi.create({ ...data, confirmDuplicate });
     },
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['customer', id] });
+      setDuplicateMatches(null);
+      setPendingFormData(null);
       navigate(`/customers/${saved.id}`);
     },
     onError: (err: any) => {
@@ -84,13 +96,36 @@ export const CustomerFormPage: React.FC = () => {
     },
   });
 
-  const onSubmit = (data: CustomerFormData) => {
+  const onSubmit = async (data: CustomerFormData) => {
     setServerError(null);
-    mutation.mutate(data);
+
+    // If adding a new customer, perform duplicate check first
+    if (!isEditing) {
+      try {
+        const check = await customersApi.checkDuplicate(data.phone, data.fullName);
+        if (check.hasMatches) {
+          const combined = [...check.matchingPhone, ...check.matchingName];
+          // deduplicate by id
+          const unique = combined.filter((v, i, a) => a.findIndex((t) => t.id === v.id) === i);
+          setDuplicateMatches(unique);
+          setPendingFormData(data);
+          return;
+        }
+      } catch {
+        // If check fails, allow proceeding directly
+      }
+    }
+
+    mutation.mutate({ data, confirmDuplicate: false });
+  };
+
+  const handleConfirmDuplicateCreate = () => {
+    if (!pendingFormData) return;
+    mutation.mutate({ data: pendingFormData, confirmDuplicate: true });
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-8">
+    <div className="min-h-screen bg-slate-50 pb-16">
       <TopHeader
         title={isEditing ? 'Edit Customer' : 'Add New Customer'}
         subtitle="Notebook & Directory Record"
@@ -99,9 +134,9 @@ export const CustomerFormPage: React.FC = () => {
       />
 
       <div className="max-w-xl mx-auto px-4 py-4">
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
           {serverError && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 flex items-start gap-2.5 text-xs text-red-800">
+            <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2.5 text-xs text-red-800">
               <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-600" />
               <span>{serverError}</span>
             </div>
@@ -116,7 +151,7 @@ export const CustomerFormPage: React.FC = () => {
                 type="text"
                 {...register('fullName')}
                 placeholder="e.g. Ramesh Kumar Verma"
-                className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white transition-all"
+                className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white transition-all font-medium"
               />
               {errors.fullName && (
                 <p className="mt-1 text-[11px] text-red-600">{errors.fullName.message}</p>
@@ -152,8 +187,8 @@ export const CustomerFormPage: React.FC = () => {
                 <input
                   type="tel"
                   {...register('alternatePhone')}
-                  placeholder="Optional backup phone"
-                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white transition-all"
+                  placeholder="Optional landline / spouse"
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white transition-all font-mono"
                 />
               </div>
             </div>
@@ -165,7 +200,7 @@ export const CustomerFormPage: React.FC = () => {
               <textarea
                 rows={2}
                 {...register('address')}
-                placeholder="Door No, Street, Landmark, Village / Town"
+                placeholder="House #, Street, Village/Town, Landmark"
                 className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white transition-all"
               />
             </div>
@@ -173,11 +208,11 @@ export const CustomerFormPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Identity Proof Type
+                  Identity Document
                 </label>
                 <select
                   {...register('identityProofType')}
-                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white transition-all"
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
                 >
                   <option value="Aadhaar Card">Aadhaar Card</option>
                   <option value="PAN Card">PAN Card</option>
@@ -189,44 +224,44 @@ export const CustomerFormPage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  ID Document Number
+                  Document / Aadhaar Number
                 </label>
                 <input
                   type="text"
                   {...register('identityProofNumber')}
-                  placeholder="e.g. XXXX-XXXX-1234"
-                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white transition-all"
+                  placeholder="e.g. 5432 1098 7654"
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white font-mono"
                 />
               </div>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Notebook Notes / Credit Remarks
+                Remarks / Personal Note
               </label>
-              <textarea
-                rows={2}
+              <input
+                type="text"
                 {...register('notes')}
-                placeholder="e.g. Shopkeeper near market, pays cash on 5th, introduced by Ramesh"
-                className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white transition-all"
+                placeholder="e.g. Known through shopkeeper Ramesh; punctual with cash"
+                className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
               />
             </div>
 
-            <div className="pt-3">
+            <div className="pt-2">
               <button
                 type="submit"
-                disabled={isSubmitting || mutation.isPending}
-                className="w-full h-11 flex items-center justify-center gap-2 rounded-lg bg-teal-700 text-white font-semibold text-sm hover:bg-teal-800 transition-all disabled:opacity-50 touch-target shadow-xs"
+                disabled={mutation.isPending}
+                className="w-full py-3 px-4 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white font-bold text-sm shadow-sm transition-all flex items-center justify-center gap-2 touch-target"
               >
-                {isSubmitting || mutation.isPending ? (
+                {mutation.isPending ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    <span>Saving Customer...</span>
+                    <span>Saving Customer Profile...</span>
                   </>
                 ) : (
                   <>
                     <Save size={16} />
-                    <span>{isEditing ? 'Save Changes' : 'Create Customer Record'}</span>
+                    <span>{isEditing ? 'Update Customer' : 'Save Customer to Directory'}</span>
                   </>
                 )}
               </button>
@@ -234,6 +269,87 @@ export const CustomerFormPage: React.FC = () => {
           </form>
         </div>
       </div>
+
+      {/* Duplicate Warning Modal */}
+      {duplicateMatches && duplicateMatches.length > 0 && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-amber-300">
+            <div className="flex items-center justify-between pb-3 border-b border-amber-100">
+              <div className="flex items-center gap-2 text-amber-700">
+                <AlertTriangle size={20} />
+                <h3 className="text-base font-bold text-slate-900">
+                  Potential Duplicate Customer
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDuplicateMatches(null)}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 mt-3 leading-relaxed">
+              We found existing customer records with matching phone number or name. Note that family members in small towns sometimes share a phone:
+            </p>
+
+            <div className="space-y-2 mt-3 max-h-48 overflow-y-auto">
+              {duplicateMatches.map((match) => (
+                <div
+                  key={match.id}
+                  className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <span>{match.fullName}</span>
+                      <span className="font-mono text-[10px] text-amber-900 px-1 py-0.2 rounded bg-amber-100">
+                        {match.customerCode}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      Phone: {match.phone} • {match.address || 'Guntur'}
+                    </div>
+                  </div>
+
+                  <Link
+                    to={`/customers/${match.id}`}
+                    target="_blank"
+                    className="p-1.5 rounded-lg bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 text-[11px] font-semibold flex items-center gap-1 shrink-0"
+                  >
+                    <span>View</span>
+                    <ExternalLink size={12} />
+                  </Link>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t border-slate-100 mt-4">
+              <button
+                type="button"
+                onClick={() => setDuplicateMatches(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel & Edit Info
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmDuplicateCreate}
+                disabled={mutation.isPending}
+                className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center justify-center gap-1.5"
+              >
+                {mutation.isPending ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Check size={14} />
+                )}
+                <span>Confirm & Create Separate Record</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

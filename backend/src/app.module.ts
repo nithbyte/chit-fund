@@ -8,7 +8,14 @@ import { CustomersModule } from './customers/customers.module.js';
 import { ChitGroupsModule } from './chit-groups/chit-groups.module.js';
 import { CollectionsModule } from './collections/collections.module.js';
 import { AuctionsModule } from './auctions/auctions.module.js';
+import { PayoutsModule } from './payouts/payouts.module.js';
+import { ExpensesModule } from './expenses/expenses.module.js';
+import { ReportsModule } from './reports/reports.module.js';
+import { AuditLogsModule } from './audit-logs/audit-logs.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
+import { SettingsModule } from './settings/settings.module.js';
+import { ReconciliationModule } from './reconciliation/reconciliation.module.js';
+import { ImportModule } from './import/import.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 
@@ -30,7 +37,14 @@ import { AppService } from './app.service.js';
     ChitGroupsModule,
     CollectionsModule,
     AuctionsModule,
+    PayoutsModule,
+    ExpensesModule,
+    ReportsModule,
+    AuditLogsModule,
     DashboardModule,
+    SettingsModule,
+    ReconciliationModule,
+    ImportModule,
   ],
   controllers: [AppController],
   providers: [

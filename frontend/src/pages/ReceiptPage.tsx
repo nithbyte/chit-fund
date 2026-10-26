@@ -3,12 +3,16 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Printer,
+  Share2,
+  Download,
   AlertTriangle,
   RotateCcw,
   X,
   Loader2,
+  Check,
 } from 'lucide-react';
 import { collectionsApi } from '../api/collections';
+import { settingsApi } from '../api/settings';
 import { TopHeader } from '../components/layout/TopHeader';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { formatINR, formatDateTime, formatPhone } from '../utils/formatters';
@@ -20,11 +24,26 @@ export const ReceiptPage: React.FC = () => {
   const [isReverseModalOpen, setIsReverseModalOpen] = useState(false);
   const [reversalReason, setReversalReason] = useState('');
   const [reversalError, setReversalError] = useState<string | null>(null);
+  const [copiedToast, setCopiedToast] = useState(false);
 
+  // 1. Fetch Receipt
   const { data: receipt, isLoading, error } = useQuery({
     queryKey: ['receipt', id],
     queryFn: () => collectionsApi.getById(id!),
     enabled: !!id,
+  });
+
+  // 2. Fetch Company Settings
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: settingsApi.getAll,
+  });
+
+  // 3. Fetch Customer Current Dues to show Remaining Balance
+  const { data: customerDues } = useQuery({
+    queryKey: ['customerDues', receipt?.customerId],
+    queryFn: () => collectionsApi.getCustomerDues(receipt!.customerId),
+    enabled: !!receipt?.customerId,
   });
 
   const reverseMutation = useMutation({
@@ -32,6 +51,7 @@ export const ReceiptPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['receipt', id] });
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+      queryClient.invalidateQueries({ queryKey: ['customerDues', receipt?.customerId] });
       setIsReverseModalOpen(false);
       setReversalReason('');
     },
@@ -40,8 +60,58 @@ export const ReceiptPage: React.FC = () => {
     },
   });
 
+  const companyName = settings?.company_name || 'Durga Chit Fund';
+  const companyPhone = settings?.company_phone || '+91 98480 11223';
+  const companyAddress = settings?.company_address || 'Main Road, Brodipet, Guntur, AP - 522002';
+  const companyTagline = settings?.company_tagline || 'Daily Chit Savings & Collections';
+
   const handlePrint = () => {
     window.print();
+  };
+
+  const receiptSummaryText = receipt
+    ? `*${companyName} - PAYMENT RECEIPT*
+Receipt No: ${receipt.receiptNumber}
+Date: ${formatDateTime(receipt.paymentDate)}
+Customer: ${receipt.customer?.fullName} (${receipt.customer?.customerCode})
+Amount Received: ₹${Number(receipt.amount).toLocaleString('en-IN')}
+Payment Mode: ${receipt.paymentMode}${receipt.transactionRef ? ` (Ref: ${receipt.transactionRef})` : ''}
+Allocations:
+${receipt.allocations?.map((a: any) => ` • ${a.installment?.chitGroup?.name || 'Chit'} (Ticket #${a.membership?.ticketNumber}, Month ${a.installment?.monthNumber}): ₹${Number(a.allocatedAmount).toLocaleString('en-IN')}`).join('\n')}
+${customerDues ? `Remaining Outstanding Balance: ₹${customerDues.totalDueAmount.toLocaleString('en-IN')}` : ''}
+Proprietor: Durga Devi (${companyPhone})`
+    : '';
+
+  const handleShare = async () => {
+    if (!receipt) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${companyName} Receipt #${receipt.receiptNumber}`,
+          text: receiptSummaryText,
+          url: window.location.href,
+        });
+        return;
+      } catch {
+        // User cancelled or fallback
+      }
+    }
+
+    // Fallback: copy to clipboard
+    navigator.clipboard.writeText(receiptSummaryText);
+    setCopiedToast(true);
+    setTimeout(() => setCopiedToast(false), 3000);
+  };
+
+  const handleDownload = () => {
+    if (!receipt) return;
+    const blob = new Blob([receiptSummaryText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Receipt_${receipt.receiptNumber}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   if (isLoading) {
@@ -57,15 +127,23 @@ export const ReceiptPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-50">
         <TopHeader title="Payment Receipt" showBack backPath="/dashboard" />
-        <div className="max-w-md mx-auto p-4 mt-8 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs">
-          Receipt not found.
+        <div className="max-w-md mx-auto p-4 mt-8 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs text-center">
+          Receipt not found or transaction unconfirmed.
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-12">
+    <div className="min-h-screen bg-slate-50 pb-16">
+      {/* Toast Alert */}
+      {copiedToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-lg flex items-center gap-2">
+          <Check size={16} className="text-teal-400" />
+          <span>Receipt copied to clipboard!</span>
+        </div>
+      )}
+
       {/* App Header (Hidden during print) */}
       <div className="print:hidden">
         <TopHeader
@@ -76,11 +154,23 @@ export const ReceiptPage: React.FC = () => {
           rightAction={
             <div className="flex items-center gap-1.5">
               <button
-                onClick={handlePrint}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 transition-colors shadow-xs touch-target"
+                type="button"
+                onClick={handleShare}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-xs font-semibold shadow-xs"
+                title="Share Receipt"
               >
-                <Printer size={15} />
-                <span>Print</span>
+                <Share2 size={14} />
+                <span className="hidden sm:inline">Share</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold shadow-xs"
+                title="Print Receipt"
+              >
+                <Printer size={14} />
+                <span className="hidden sm:inline">Print</span>
               </button>
             </div>
           }
@@ -88,8 +178,8 @@ export const ReceiptPage: React.FC = () => {
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-4 print:p-0 print:max-w-none">
-        {/* Receipt Container */}
-        <div className="bg-white rounded-2xl border border-slate-300 shadow-sm p-6 print:border-none print:shadow-none print:p-8 relative overflow-hidden">
+        {/* Receipt Paper Card */}
+        <div className="bg-white rounded-2xl border border-slate-300 shadow-sm p-5 sm:p-6 print:border-none print:shadow-none print:p-8 relative overflow-hidden">
           {/* Watermark if reversed */}
           {receipt.isReversed && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-15 rotate-[-25deg] select-none">
@@ -106,14 +196,14 @@ export const ReceiptPage: React.FC = () => {
                 D
               </div>
               <h1 className="text-xl font-black tracking-tight text-slate-950 uppercase">
-                Durga Chit Fund
+                {companyName}
               </h1>
             </div>
             <p className="text-xs text-slate-600 font-medium">
-              Small Chit Savings & Collections • Guntur, Andhra Pradesh
+              {companyTagline} • {companyAddress}
             </p>
             <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-              Proprietor: Durga Devi • Contact: +91 98480 11223
+              Proprietor: Durga Devi • Contact: {companyPhone}
             </p>
             <div className="inline-block mt-2 px-3 py-0.5 rounded-full bg-slate-100 border border-slate-300 text-[11px] font-bold text-slate-800 tracking-wider uppercase">
               Official Collection Receipt
@@ -190,7 +280,7 @@ export const ReceiptPage: React.FC = () => {
           </div>
 
           {/* Total Amount in INR */}
-          <div className="py-4 border-b-2 border-slate-900 flex items-center justify-between">
+          <div className="py-4 border-b border-slate-200 flex items-center justify-between">
             <div>
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
                 Total Amount Received
@@ -204,6 +294,18 @@ export const ReceiptPage: React.FC = () => {
               {formatINR(receipt.amount)}
             </div>
           </div>
+
+          {/* Remaining Balance Section */}
+          {customerDues && (
+            <div className="py-3 border-b-2 border-slate-900 flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-600">
+                Customer's Total Remaining Outstanding Balance:
+              </span>
+              <span className="font-extrabold text-amber-800 text-sm font-mono tabular-nums">
+                {formatINR(customerDues.totalDueAmount)}
+              </span>
+            </div>
+          )}
 
           {/* Signature & Note Footer */}
           <div className="pt-6 grid grid-cols-2 gap-4 text-xs">
@@ -235,23 +337,46 @@ export const ReceiptPage: React.FC = () => {
         </div>
 
         {/* Action Controls for Durga (Hidden in Print) */}
-        <div className="mt-4 flex items-center justify-between gap-3 print:hidden">
-          <Link
-            to="/collect"
-            className="flex-1 py-3 px-4 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors touch-target"
-          >
-            <span>Record Next Collection</span>
-          </Link>
-
-          {!receipt.isReversed && (
+        <div className="mt-4 space-y-2.5 print:hidden">
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsReverseModalOpen(true)}
-              className="py-3 px-4 rounded-xl bg-white hover:bg-red-50 text-red-700 border border-red-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors touch-target"
+              type="button"
+              onClick={handleShare}
+              className="flex-1 py-3 px-3 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors touch-target"
             >
-              <RotateCcw size={14} />
-              <span>Reverse Receipt</span>
+              <Share2 size={15} />
+              <span>Share Receipt</span>
             </button>
-          )}
+
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="flex-1 py-3 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors touch-target"
+            >
+              <Download size={15} />
+              <span>Download Text</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Link
+              to="/collect"
+              className="flex-1 py-3 px-4 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors touch-target"
+            >
+              <span>Record Next Collection</span>
+            </Link>
+
+            {!receipt.isReversed && (
+              <button
+                type="button"
+                onClick={() => setIsReverseModalOpen(true)}
+                className="py-3 px-4 rounded-xl bg-white hover:bg-red-50 text-red-700 border border-red-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors touch-target"
+              >
+                <RotateCcw size={14} />
+                <span>Reverse</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -265,6 +390,7 @@ export const ReceiptPage: React.FC = () => {
                 <h3 className="text-base font-bold text-slate-900">Reverse Payment Receipt</h3>
               </div>
               <button
+                type="button"
                 onClick={() => setIsReverseModalOpen(false)}
                 className="p-1 rounded-md text-slate-400 hover:text-slate-700"
               >
@@ -273,7 +399,7 @@ export const ReceiptPage: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-600 mt-3 leading-relaxed">
-              Financial records are <strong>never deleted</strong>. Reversing this receipt will mark it as reversed, revert installment allocations, and record an audit trail entry.
+              Financial records are <strong>never deleted</strong>. Reversing this receipt will mark it as reversed, revert installment allocations in the ledger, and record an audit log entry.
             </p>
 
             {reversalError && (
@@ -299,7 +425,7 @@ export const ReceiptPage: React.FC = () => {
                   rows={2}
                   value={reversalReason}
                   onChange={(e) => setReversalReason(e.target.value)}
-                  placeholder="e.g. Duplicate receipt recorded by mistake / customer cheque returned"
+                  placeholder="e.g. Mistake in entered amount / customer cheque bounced"
                   className="w-full px-3 py-2 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-red-600 focus:outline-none"
                 />
               </div>
