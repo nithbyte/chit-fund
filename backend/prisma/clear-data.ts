@@ -1,7 +1,14 @@
 import { PrismaClient, Role } from '@prisma/client';
 import { hash } from '@node-rs/argon2';
 
-const prisma = new PrismaClient();
+const isLive = process.argv.includes('--live') || process.env.NODE_ENV === 'production';
+const liveUrl = 'postgresql://postgres.muegzetqfloifrewnfod:Chitfund%40durga@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true';
+
+const prisma = new PrismaClient(
+  isLive
+    ? { datasources: { db: { url: liveUrl } } }
+    : undefined
+);
 
 async function main() {
   console.log('🧹 Clearing all operational data from Durga Chit Fund database...');
@@ -67,6 +74,25 @@ async function main() {
   });
 
   console.log(`✅ System owner account verified: ${owner.fullName} (${owner.username})`);
+
+  // 3. Default System Settings
+  const defaultSettings = [
+    { key: 'company_name', value: 'Durga Chit Fund', description: 'Business display title on receipts and dashboard' },
+    { key: 'company_address', value: 'Plot 12, Main Bazar, Guntur, AP - 522001', description: 'Office and collection counter address' },
+    { key: 'company_phone', value: '+91 98480 11223', description: 'Proprietor phone for customer inquiries' },
+    { key: 'company_proprietor', value: 'Durga Devi', description: 'Authorized foreman and owner signature' },
+    { key: 'business_timezone', value: 'Asia/Kolkata', description: 'Official transaction timezone' },
+  ];
+
+  for (const s of defaultSettings) {
+    await prisma.setting.upsert({
+      where: { key: s.key },
+      update: { value: s.value, description: s.description },
+      create: { key: s.key, value: s.value, description: s.description },
+    });
+  }
+  console.log('✅ Default system settings verified.');
+
   console.log('🎉 All operational data cleared successfully. System is completely fresh and ready for manual data entry!');
 }
 
