@@ -29,7 +29,8 @@ async function bootstrap() {
           allowedOrigins.includes(origin) ||
           url.hostname.endsWith('.vercel.app') ||
           url.hostname === 'manammcare.com' ||
-          url.hostname.endsWith('.manammcare.com')
+          url.hostname.endsWith('.manammcare.com') ||
+          url.hostname === 'localhost'
         ) {
           return callback(null, true);
         }
@@ -37,8 +38,10 @@ async function bootstrap() {
       return callback(null, false);
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Origin'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   });
 
   // Global API Prefix
