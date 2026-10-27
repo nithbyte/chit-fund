@@ -16,9 +16,26 @@ async function bootstrap() {
   );
 
   // CORS
-  const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
+  const corsOriginEnv = process.env.CORS_ORIGIN || 'http://localhost:5173';
+  const allowedOrigins = corsOriginEnv.split(',').map((o) => o.trim());
+
   app.enableCors({
-    origin: corsOrigin === '*' ? true : corsOrigin.split(','),
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      if (!origin) return callback(null, true);
+      try {
+        const url = new URL(origin);
+        if (
+          allowedOrigins.includes('*') ||
+          allowedOrigins.includes(origin) ||
+          url.hostname.endsWith('.vercel.app') ||
+          url.hostname === 'manammcare.com' ||
+          url.hostname.endsWith('.manammcare.com')
+        ) {
+          return callback(null, true);
+        }
+      } catch (_) {}
+      return callback(null, false);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
