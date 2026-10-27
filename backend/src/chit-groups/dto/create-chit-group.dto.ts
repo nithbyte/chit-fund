@@ -108,6 +108,26 @@ export class CreateChitGroupDto {
   @IsString()
   status?: string;
 
+  @ApiPropertyOptional({
+    enum: ['DISCOUNT_BASED', 'FIXED_PAYOUT'],
+    default: 'DISCOUNT_BASED',
+    description: 'Auction calculation mode (DISCOUNT_BASED or FIXED_PAYOUT)',
+  })
+  @IsOptional()
+  @IsString()
+  auctionCalculationMode?: string;
+
+  @ApiPropertyOptional({ example: 95000, description: 'Agreed fixed winner payout for fixed-payout groups' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  fixedPayoutAmount?: number;
+
+  @ApiPropertyOptional({ example: 0, description: 'Configured adjustments/deductions for fixed-payout groups' })
+  @IsOptional()
+  @IsNumber()
+  fixedPayoutAdjustments?: number;
+
   @ApiPropertyOptional({ example: 'Monthly auction chit with 20 members.' })
   @IsOptional()
   @IsString()

@@ -62,6 +62,25 @@ export class ActivateChitGroupDto {
   @IsString()
   payoutRuleNotes?: string;
 
+  @ApiPropertyOptional({
+    enum: ['DISCOUNT_BASED', 'FIXED_PAYOUT'],
+    description: 'Auction calculation mode (DISCOUNT_BASED or FIXED_PAYOUT)',
+  })
+  @IsOptional()
+  @IsString()
+  auctionCalculationMode?: string;
+
+  @ApiPropertyOptional({ example: 95000, description: 'Agreed fixed winner payout for fixed-payout groups' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  fixedPayoutAmount?: number;
+
+  @ApiPropertyOptional({ example: 0, description: 'Configured adjustments/deductions for fixed-payout groups' })
+  @IsOptional()
+  @IsNumber()
+  fixedPayoutAdjustments?: number;
+
   @ApiProperty({ example: true, description: 'Explicit confirmation flag by owner Durga' })
   @IsBoolean()
   confirmActivation!: boolean;

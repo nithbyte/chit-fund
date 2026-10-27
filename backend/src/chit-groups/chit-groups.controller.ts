@@ -9,6 +9,8 @@ import { EnrollMemberDto } from './dto/enroll-member.dto.js';
 import { ActivateChitGroupDto } from './dto/activate-chit-group.dto.js';
 import { UpdateCommissionDto } from './dto/update-commission.dto.js';
 
+import { UpdateAuctionModeDto } from './dto/update-auction-mode.dto.js';
+
 @ApiTags('Chit Groups')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -77,5 +79,16 @@ export class ChitGroupsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.chitGroupsService.updateCommission(id, dto, user?.id);
+  }
+
+  @Patch(':id/auction-mode')
+  @ApiOperation({ summary: 'Configure or update auction calculation mode (Discount-Based or Fixed-Payout) and terms' })
+  @ApiResponse({ status: 200, description: 'Auction calculation mode updated' })
+  async updateAuctionMode(
+    @Param('id') id: string,
+    @Body() dto: UpdateAuctionModeDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.chitGroupsService.updateAuctionMode(id, dto, user?.id);
   }
 }

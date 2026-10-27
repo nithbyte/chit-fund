@@ -272,5 +272,105 @@ describe('Financial Logic & Mobile Collection Validations', () => {
       expect(res.estimateINR).toBeNull();
     });
   });
+
+  describe('Auction Calculation Modes & Payout Previews', () => {
+    // Auction calculation helper
+    function computeAuction(
+      mode: 'DISCOUNT_BASED' | 'FIXED_PAYOUT',
+      totalValue: number,
+      totalMembers: number,
+      winningBidAmount?: number,
+      foremanCommissionRate?: number,
+      isCommissionConfirmed?: boolean,
+      fixedPayoutAmount?: number,
+      adjustmentAmount?: number,
+    ) {
+      if (mode === 'DISCOUNT_BASED') {
+        const winningBid = winningBidAmount || 0;
+        const commission = isCommissionConfirmed && foremanCommissionRate
+          ? Math.round(((totalValue * foremanCommissionRate) / 100) * 100) / 100
+          : 0;
+
+        let dividendTotal = 0;
+        let dividendPerMember = 0;
+        if (winningBid > 0) {
+          dividendTotal = Math.max(0, winningBid - commission);
+          dividendPerMember = Math.floor((dividendTotal / totalMembers) * 100) / 100;
+        }
+
+        const netPrizeAmount = totalValue - winningBid;
+        return {
+          mode,
+          winningBid,
+          foremanCommission: commission,
+          dividendTotal,
+          dividendPerMember,
+          netPrizeAmount,
+        };
+      } else {
+        const fixedPayout = fixedPayoutAmount !== undefined ? fixedPayoutAmount : totalValue;
+        const adjustments = adjustmentAmount || 0;
+        const netPrizeAmount = fixedPayout - adjustments;
+
+        return {
+          mode,
+          winningBid: 0,
+          foremanCommission: adjustments,
+          dividendTotal: 0,
+          dividendPerMember: 0,
+          fixedPayoutAmount: fixedPayout,
+          adjustmentAmount: adjustments,
+          netPrizeAmount,
+        };
+      }
+    }
+
+    it('Discount-Based: Computes winning bid, confirmed 5% commission, and member dividend correctly', () => {
+      const result = computeAuction('DISCOUNT_BASED', 100000, 20, 22000, 5.0, true);
+      expect(result.winningBid).toBe(22000);
+      expect(result.foremanCommission).toBe(5000);
+      expect(result.dividendTotal).toBe(17000);
+      expect(result.dividendPerMember).toBe(850); // 17000 / 20 = 850
+      expect(result.netPrizeAmount).toBe(78000); // 100000 - 22000
+    });
+
+    it('Discount-Based Safeguard: Unconfirmed commission is NOT deducted from discount pool', () => {
+      const result = computeAuction('DISCOUNT_BASED', 100000, 20, 20000, 5.0, false);
+      expect(result.foremanCommission).toBe(0); // Unconfirmed = 0
+      expect(result.dividendTotal).toBe(20000); // Full discount distributed to members
+      expect(result.dividendPerMember).toBe(1000);
+      expect(result.netPrizeAmount).toBe(80000);
+    });
+
+    it('Zero Discount Safeguard: Never generates dividends when no discount exists', () => {
+      const result = computeAuction('DISCOUNT_BASED', 100000, 20, 0, 5.0, true);
+      expect(result.winningBid).toBe(0);
+      expect(result.dividendTotal).toBe(0);
+      expect(result.dividendPerMember).toBe(0);
+      expect(result.netPrizeAmount).toBe(100000); // Winner gets full chit value
+    });
+
+    it('Fixed Payout Mode: Sets auction discount to zero and dividend to zero', () => {
+      const result = computeAuction('FIXED_PAYOUT', 100000, 20, undefined, undefined, undefined, 95000, 1000);
+      expect(result.winningBid).toBe(0);
+      expect(result.dividendTotal).toBe(0);
+      expect(result.dividendPerMember).toBe(0);
+      expect(result.fixedPayoutAmount).toBe(95000);
+      expect(result.adjustmentAmount).toBe(1000);
+      expect(result.netPrizeAmount).toBe(94000); // 95000 - 1000
+    });
+
+    it('Fixed Payout Mode: Does not assume payout equals chit value, preserves scheme terms', () => {
+      // Scheme with ₹10,400 total value and ₹10,400 fixed payout with 0 adjustments
+      const diwaliScheme = computeAuction('FIXED_PAYOUT', 10400, 52, undefined, undefined, undefined, 10400, 0);
+      expect(diwaliScheme.netPrizeAmount).toBe(10400);
+      expect(diwaliScheme.dividendPerMember).toBe(0);
+
+      // Scheme with ₹2,00,000 total value and agreed ₹1,85,000 payout
+      const scheme2L = computeAuction('FIXED_PAYOUT', 200000, 20, undefined, undefined, undefined, 185000, 2500);
+      expect(scheme2L.netPrizeAmount).toBe(182500); // 185000 - 2500
+      expect(scheme2L.dividendPerMember).toBe(0);
+    });
+  });
 });
 

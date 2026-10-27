@@ -25,6 +25,11 @@ enum ChitGroupStatus {
   CANCELLED
 }
 
+enum AuctionCalculationMode {
+  DISCOUNT_BASED
+  FIXED_PAYOUT
+}
+
 enum CommissionType {
   NOT_CONFIGURED
   NO_COMMISSION
@@ -133,12 +138,15 @@ model ChitGroup {
   isCommissionConfirmed     Boolean         @default(false) @map("is_commission_confirmed")
   minBidDiscount            Decimal?        @map("min_bid_discount") @db.Decimal(12, 2)
   maxBidDiscount            Decimal?        @map("max_bid_discount") @db.Decimal(12, 2)
-  auctionFrequency      String          @default("MONTHLY") @map("auction_frequency")
-  auctionDayOfMonth     Int?            @map("auction_day_of_month")
-  status                ChitGroupStatus @default(ACTIVE)
-  notes                 String?
-  createdAt             DateTime        @default(now()) @map("created_at")
-  updatedAt             DateTime        @updatedAt @map("updated_at")
+  auctionFrequency          String                 @default("MONTHLY") @map("auction_frequency")
+  auctionDayOfMonth         Int?                   @map("auction_day_of_month")
+  auctionCalculationMode    AuctionCalculationMode @default(DISCOUNT_BASED) @map("auction_calculation_mode")
+  fixedPayoutAmount         Decimal?               @map("fixed_payout_amount") @db.Decimal(12, 2)
+  fixedPayoutAdjustments    Decimal?               @default(0.00) @map("fixed_payout_adjustments") @db.Decimal(12, 2)
+  status                    ChitGroupStatus        @default(ACTIVE)
+  notes                     String?
+  createdAt                 DateTime               @default(now()) @map("created_at")
+  updatedAt                 DateTime               @updatedAt @map("updated_at")
 
   memberships  Membership[]
   installments Installment[]
@@ -257,9 +265,12 @@ model Auction {
   foremanCommission   Decimal       @map("foreman_commission") @db.Decimal(12, 2)
   dividendTotal       Decimal       @map("dividend_total") @db.Decimal(12, 2)
   dividendPerMember   Decimal       @map("dividend_per_member") @db.Decimal(12, 2)
-  winningMembershipId String?       @map("winning_membership_id") @db.Uuid
-  netPrizeAmount      Decimal       @map("net_prize_amount") @db.Decimal(12, 2)
-  status              AuctionStatus @default(COMPLETED)
+  winningMembershipId    String?                @map("winning_membership_id") @db.Uuid
+  auctionCalculationMode AuctionCalculationMode @default(DISCOUNT_BASED) @map("auction_calculation_mode")
+  fixedPayoutAmount      Decimal?               @map("fixed_payout_amount") @db.Decimal(12, 2)
+  adjustmentAmount       Decimal                @default(0.00) @map("adjustment_amount") @db.Decimal(12, 2)
+  netPrizeAmount         Decimal                @map("net_prize_amount") @db.Decimal(12, 2)
+  status                 AuctionStatus          @default(COMPLETED)
   notes               String?
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")

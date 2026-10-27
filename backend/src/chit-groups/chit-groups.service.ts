@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ChitGroupStatus, ChitType, CommissionType } from '@prisma/client';
+import { AuctionCalculationMode, ChitGroupStatus, ChitType, CommissionType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateChitGroupDto } from './dto/create-chit-group.dto.js';
 import { EnrollMemberDto } from './dto/enroll-member.dto.js';
 import { ActivateChitGroupDto } from './dto/activate-chit-group.dto.js';
 import { UpdateCommissionDto } from './dto/update-commission.dto.js';
+import { UpdateAuctionModeDto } from './dto/update-auction-mode.dto.js';
 
 export interface SchemeTemplate {
   templateId: string;
@@ -20,6 +21,8 @@ export interface SchemeTemplate {
   defaultCommissionRate?: number;
   defaultCommissionAmount?: number;
   commissionCalculationBase?: string;
+  defaultAuctionCalculationMode?: AuctionCalculationMode;
+  defaultFixedPayoutAmount?: number;
   requiresMemberConfirmation: boolean;
   requiresPayoutConfirmation: boolean;
   notes: string;
@@ -51,6 +54,8 @@ export class ChitGroupsService {
         defaultCommissionAmount: 0,
         defaultCommissionRate: 0,
         commissionCalculationBase: 'INSTALLMENT_AMOUNT',
+        defaultAuctionCalculationMode: AuctionCalculationMode.FIXED_PAYOUT,
+        defaultFixedPayoutAmount: 10400,
         requiresMemberConfirmation: true,
         requiresPayoutConfirmation: true,
         notes:
@@ -71,6 +76,7 @@ export class ChitGroupsService {
         defaultCommissionType: CommissionType.PERCENTAGE_OF_CHIT_VALUE,
         defaultCommissionRate: 5.0,
         commissionCalculationBase: 'CHIT_VALUE',
+        defaultAuctionCalculationMode: AuctionCalculationMode.DISCOUNT_BASED,
         requiresMemberConfirmation: true,
         requiresPayoutConfirmation: true,
         notes:
@@ -308,6 +314,9 @@ export class ChitGroupsService {
           maxBidDiscount: createDto.maxBidDiscount ?? null,
           auctionFrequency: frequency,
           auctionDayOfMonth: isWeekly ? null : (createDto.auctionDayOfMonth ?? startDate.getDate()),
+          auctionCalculationMode: (createDto.auctionCalculationMode as AuctionCalculationMode) || AuctionCalculationMode.DISCOUNT_BASED,
+          fixedPayoutAmount: createDto.fixedPayoutAmount ?? null,
+          fixedPayoutAdjustments: createDto.fixedPayoutAdjustments ?? 0,
           status: groupStatus,
           notes: createDto.notes?.trim() ?? null,
         },
@@ -411,6 +420,9 @@ export class ChitGroupsService {
           isCommissionConfirmed: dto.isCommissionConfirmed !== undefined ? dto.isCommissionConfirmed : group.isCommissionConfirmed,
           minBidDiscount: dto.minBidDiscount ?? group.minBidDiscount,
           maxBidDiscount: dto.maxBidDiscount ?? group.maxBidDiscount,
+          auctionCalculationMode: (dto.auctionCalculationMode as AuctionCalculationMode) ?? group.auctionCalculationMode,
+          fixedPayoutAmount: dto.fixedPayoutAmount !== undefined ? dto.fixedPayoutAmount : group.fixedPayoutAmount,
+          fixedPayoutAdjustments: dto.fixedPayoutAdjustments !== undefined ? dto.fixedPayoutAdjustments : group.fixedPayoutAdjustments,
           status: ChitGroupStatus.ACTIVE,
           notes: updatedNotes,
         },
@@ -481,6 +493,46 @@ export class ChitGroupsService {
             commissionRate: dto.commissionRate,
             commissionAmount: dto.commissionAmount,
             isCommissionConfirmed: dto.isCommissionConfirmed,
+          },
+        },
+      });
+    }
+
+    return updated;
+  }
+
+  /**
+   * Configure or update the auction calculation mode (Discount-Based vs Fixed-Payout)
+   * at the chit group level, preserving historical records and logging audit trail.
+   */
+  async updateAuctionMode(groupId: string, dto: UpdateAuctionModeDto, performedById?: string) {
+    const group = await this.prisma.chitGroup.findUnique({ where: { id: groupId } });
+    if (!group) {
+      throw new NotFoundException(`Chit Group ${groupId} not found`);
+    }
+
+    const updated = await this.prisma.chitGroup.update({
+      where: { id: groupId },
+      data: {
+        auctionCalculationMode: dto.auctionCalculationMode,
+        fixedPayoutAmount: dto.fixedPayoutAmount !== undefined ? dto.fixedPayoutAmount : group.fixedPayoutAmount,
+        fixedPayoutAdjustments: dto.fixedPayoutAdjustments !== undefined ? dto.fixedPayoutAdjustments : group.fixedPayoutAdjustments,
+      },
+    });
+
+    if (performedById) {
+      await this.prisma.auditLog.create({
+        data: {
+          entityType: 'CHIT_GROUP',
+          entityId: groupId,
+          action: 'AUCTION_MODE_UPDATED',
+          performedById,
+          metadata: {
+            groupCode: group.groupCode,
+            previousMode: group.auctionCalculationMode,
+            newMode: dto.auctionCalculationMode,
+            fixedPayoutAmount: dto.fixedPayoutAmount,
+            fixedPayoutAdjustments: dto.fixedPayoutAdjustments,
           },
         },
       });

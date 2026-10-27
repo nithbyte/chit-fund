@@ -46,6 +46,8 @@ export interface ActivateChitGroupPayload {
   confirmActivation: boolean;
 }
 
+export type AuctionCalculationMode = 'DISCOUNT_BASED' | 'FIXED_PAYOUT';
+
 export interface ChitGroup {
   id: string;
   groupCode: string;
@@ -68,6 +70,9 @@ export interface ChitGroup {
   maxBidDiscount?: number;
   auctionFrequency: string;
   auctionDayOfMonth?: number;
+  auctionCalculationMode?: AuctionCalculationMode;
+  fixedPayoutAmount?: number;
+  fixedPayoutAdjustments?: number;
   status: 'PLANNED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
   notes?: string;
   createdAt: string;
@@ -133,6 +138,19 @@ export const chitGroupsApi = {
     },
   ) =>
     apiClient<ChitGroup>(`/chit-groups/${id}/commission`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  updateAuctionMode: (
+    id: string,
+    payload: {
+      auctionCalculationMode: AuctionCalculationMode;
+      fixedPayoutAmount?: number;
+      fixedPayoutAdjustments?: number;
+    },
+  ) =>
+    apiClient<ChitGroup>(`/chit-groups/${id}/auction-mode`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
